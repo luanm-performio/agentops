@@ -1,0 +1,71 @@
+<!doctype html>
+<html data-theme="corporate">
+    <head>
+        <title>Sign In — Agent Console</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+        <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    </head>
+
+    <body class="min-h-screen bg-base-200 flex items-center justify-center p-4">
+        <div class="card bg-base-100 shadow-xl w-full max-w-sm">
+            <div class="card-body gap-4">
+
+                <div class="text-center mb-2">
+                    <h1 class="text-2xl font-bold">Agent Console</h1>
+                    <p class="text-base-content/60 text-sm mt-1">Sign in to your account</p>
+                </div>
+
+                {% if form.non_field_errors %}
+                    <div role="alert" class="alert alert-error">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                        <span>{{ form.non_field_errors|first }}</span>
+                    </div>
+                {% endif %}
+
+                <form method="post" class="flex flex-col gap-3">
+                    {% csrf_token %}
+
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Email</legend>
+                        <input
+                            type="email"
+                            name="email"
+                            class="input input-bordered w-full {% if form.email.errors %}input-error{% endif %}"
+                            placeholder="you@example.com"
+                            value="{{ form.email.value|default:'' }}"
+                            autocomplete="email"
+                            autofocus
+                            required
+                        />
+                        {% if form.email.errors %}
+                            <p class="label text-error text-xs">{{ form.email.errors|first }}</p>
+                        {% endif %}
+                    </fieldset>
+
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Password</legend>
+                        <input
+                            type="password"
+                            name="password"
+                            class="input input-bordered w-full {% if form.password.errors %}input-error{% endif %}"
+                            placeholder="••••••••"
+                            autocomplete="current-password"
+                            required
+                        />
+                        {% if form.password.errors %}
+                            <p class="label text-error text-xs">{{ form.password.errors|first }}</p>
+                        {% endif %}
+                    </fieldset>
+
+                    <button type="submit" class="btn btn-primary w-full mt-2">
+                        Sign In
+                    </button>
+                </form>
+
+            </div>
+        </div>
+    </body>
+</html>

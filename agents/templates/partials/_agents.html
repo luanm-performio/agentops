@@ -1,0 +1,49 @@
+<div class="max-w-4xl">
+
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-2xl font-bold">Agents</h2>
+        <button class="btn btn-primary btn-sm"
+                hx-get="{% url 'agent_create' %}"
+                hx-target="#modal-content"
+                hx-swap="innerHTML">
+            + Create Agent
+        </button>
+    </div>
+
+    <div id="agent-list">
+        {% include "partials/_agent_list.html" %}
+    </div>
+
+</div>
+
+<!-- Edit / Create modal (compact) -->
+<dialog id="agent-modal" class="modal">
+    <div class="modal-box w-11/12 max-w-2xl">
+        <div id="modal-content"></div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
+
+<!-- Run modal (large) -->
+<dialog id="agent-run-modal" class="modal">
+    <div class="modal-box w-11/12 max-w-5xl flex flex-col" style="height: 85vh; max-height: 85vh;">
+        <div id="run-modal-content" class="flex flex-col flex-1 min-h-0"></div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
+
+<script>
+    document.body.addEventListener('openModal', function () {
+        document.getElementById('agent-modal').showModal();
+    });
+    document.body.addEventListener('closeModal', function () {
+        document.getElementById('agent-modal').close();
+    });
+    document.body.addEventListener('openRunModal', function () {
+        document.getElementById('agent-run-modal').showModal();
+    });
+</script>

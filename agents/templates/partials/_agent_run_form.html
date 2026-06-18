@@ -1,0 +1,37 @@
+<p class="text-lg font-bold mb-1">Run Agent</p>
+<p class="text-sm text-base-content/50 mb-4">{{ agent.name }}</p>
+
+{% if error %}
+    <div role="alert" class="alert alert-error text-sm mb-4">
+        <span>{{ error }}</span>
+    </div>
+{% endif %}
+
+<form hx-post="{% url 'agent_run_start' agent.pk %}"
+      hx-target="#run-modal-content"
+      hx-swap="innerHTML"
+      class="space-y-4">
+    {% csrf_token %}
+
+    <fieldset class="fieldset">
+        <legend class="fieldset-legend">Task</legend>
+        <textarea name="prompt"
+                  class="textarea textarea-bordered w-full h-32"
+                  placeholder="What should the agent do?&#10;e.g. List the files in the working directory"
+                  autofocus
+                  required></textarea>
+    </fieldset>
+
+    <div class="modal-action mt-2">
+        <button type="button"
+                onclick="document.getElementById('agent-run-modal').close()"
+                class="btn btn-ghost btn-sm">
+            Cancel
+        </button>
+        <button type="submit"
+                class="btn btn-primary btn-sm"
+                hx-disabled-elt="this">
+            ▶ Start
+        </button>
+    </div>
+</form>

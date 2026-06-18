@@ -1,0 +1,111 @@
+<div class="max-w-5xl">
+
+    <!-- Back button -->
+    <div class="mb-4">
+        <a href="{% url 'runs' %}"
+           hx-get="{% url 'runs' %}"
+           hx-target="#content"
+           hx-swap="innerHTML"
+           hx-push-url="true"
+           class="btn btn-ghost btn-sm gap-1">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Runs
+        </a>
+    </div>
+
+    <!-- Header -->
+    <div class="flex flex-wrap items-start gap-4 mb-6">
+        <div class="flex-1">
+            <h2 class="text-2xl font-bold">{{ run.agent.name }}</h2>
+            <p class="text-base-content/50 text-sm mt-0.5">Run #{{ run.pk }}</p>
+        </div>
+        <div class="flex items-center gap-2">
+            {% if run.status == "running" %}
+                <span class="badge badge-info">Running</span>
+            {% elif run.status == "completed" %}
+                <span class="badge badge-success">Completed</span>
+            {% else %}
+                <span class="badge badge-error">Failed</span>
+            {% endif %}
+            {% if run.output %}
+            <a href="{% url 'run_export_md' run.pk %}" class="btn btn-sm btn-outline gap-1" download>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Export .md
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Meta row -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        <div class="stat bg-base-100 rounded-xl p-4 shadow-sm">
+            <div class="stat-title text-xs">Triggered by</div>
+            <div class="stat-value text-base">
+                {% if run.schedule %}schedule{% else %}manual{% endif %}
+            </div>
+            {% if run.schedule %}
+            <div class="stat-desc">{{ run.schedule.schedule_display }}</div>
+            {% endif %}
+        </div>
+        <div class="stat bg-base-100 rounded-xl p-4 shadow-sm">
+            <div class="stat-title text-xs">Started</div>
+            <div class="stat-value text-base">{{ run.started_at|date:"H:i:s" }}</div>
+            <div class="stat-desc">{{ run.started_at|date:"Y-m-d" }}</div>
+        </div>
+        <div class="stat bg-base-100 rounded-xl p-4 shadow-sm">
+            <div class="stat-title text-xs">Completed</div>
+            <div class="stat-value text-base">
+                {% if run.completed_at %}{{ run.completed_at|date:"H:i:s" }}{% else %}—{% endif %}
+            </div>
+            <div class="stat-desc">
+                {% if run.completed_at %}{{ run.completed_at|date:"Y-m-d" }}{% endif %}
+            </div>
+        </div>
+        <div class="stat bg-base-100 rounded-xl p-4 shadow-sm">
+            <div class="stat-title text-xs">Duration</div>
+            <div class="stat-value text-base">
+                {% if run.duration_seconds is not None %}{{ run.duration_seconds }}s{% else %}—{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Prompt -->
+    <div class="mb-6">
+        <h3 class="text-sm font-semibold text-base-content/60 uppercase tracking-wide mb-2">Prompt</h3>
+        <div class="bg-base-100 rounded-xl border border-base-300 px-4 py-3 text-sm whitespace-pre-wrap font-mono">{{ run.prompt }}</div>
+    </div>
+
+    <!-- Output -->
+    <div>
+        <h3 class="text-sm font-semibold text-base-content/60 uppercase tracking-wide mb-2">Output</h3>
+        {% if run.output %}
+        <div class="bg-base-100 rounded-xl border border-base-300 p-5 overflow-auto">
+            <style>
+                .run-output pre { background: #1e293b; color: #e2e8f0; padding: 1em; border-radius: 0.5em; overflow-x: auto; font-size: 0.85em; margin: 0.75em 0; }
+                .run-output code { font-family: ui-monospace, monospace; font-size: 0.875em; }
+                .run-output p { margin: 0.5em 0; line-height: 1.6; }
+                .run-output h1,.run-output h2,.run-output h3 { font-weight: 600; margin: 1em 0 0.4em; }
+                .run-output ul,.run-output ol { padding-left: 1.5em; margin: 0.4em 0; }
+                .run-output li { margin: 0.2em 0; }
+                .run-output table { border-collapse: collapse; width: 100%; margin: 0.75em 0; font-size: 0.875em; }
+                .run-output th,.run-output td { border: 1px solid oklch(var(--b3)); padding: 0.4em 0.75em; text-align: left; }
+                .run-output th { background: oklch(var(--b2)); font-weight: 600; }
+                .run-output .tool-use { background: oklch(var(--b2)); border-left: 3px solid oklch(var(--p)); padding: 0.5em 0.75em; border-radius: 0.25em; margin: 0.5em 0; font-size: 0.85em; }
+                .run-output .tool-result { background: oklch(var(--b2)); border-left: 3px solid oklch(var(--su)); padding: 0.5em 0.75em; border-radius: 0.25em; margin: 0.5em 0; font-size: 0.85em; }
+                .run-output .cost-line { font-size: 0.75em; color: oklch(var(--bc) / 0.45); margin-top: 0.5em; }
+                .run-output .output-done { color: oklch(var(--su)); font-weight: 600; }
+            </style>
+            <div class="run-output">{{ run.output|safe }}</div>
+        </div>
+        {% else %}
+        <div class="bg-base-100 rounded-xl border border-base-300 px-4 py-8 text-center text-base-content/40 text-sm">
+            No output recorded.
+        </div>
+        {% endif %}
+    </div>
+
+</div>

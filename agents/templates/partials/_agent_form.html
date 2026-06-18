@@ -1,0 +1,67 @@
+<p class="text-lg font-bold mb-4">{{ modal_title }}</p>
+
+<form hx-post="{{ form_action }}"
+      hx-target="#modal-content"
+      hx-swap="innerHTML"
+      class="space-y-4">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+        <div role="alert" class="alert alert-error text-sm">
+            <span>{{ form.non_field_errors|first }}</span>
+        </div>
+    {% endif %}
+
+    <fieldset class="fieldset">
+        <legend class="fieldset-legend">Agent Name <span class="text-error">*</span></legend>
+        {{ form.name }}
+        {% if form.name.errors %}
+            <p class="text-error text-xs mt-1">{{ form.name.errors|first }}</p>
+        {% endif %}
+    </fieldset>
+
+    <fieldset class="fieldset">
+        <legend class="fieldset-legend">Working Directory</legend>
+        {{ form.working_directory }}
+        {% if form.working_directory.errors %}
+            <p class="text-error text-xs mt-1">{{ form.working_directory.errors|first }}</p>
+        {% endif %}
+    </fieldset>
+
+    <fieldset class="fieldset">
+        <legend class="fieldset-legend">System Prompt</legend>
+        {{ form.system_prompt }}
+    </fieldset>
+
+    <fieldset class="fieldset">
+        <legend class="fieldset-legend">MCP Servers</legend>
+        <div class="flex flex-wrap gap-4 mt-1">
+            {% for value, label in form.mcp_servers.field.choices %}
+            <label class="flex items-center gap-2 cursor-pointer select-none">
+                <input type="checkbox"
+                       name="{{ form.mcp_servers.html_name }}"
+                       value="{{ value }}"
+                       class="checkbox checkbox-sm checkbox-primary"
+                       {% if value in form.mcp_servers.value %}checked{% endif %}>
+                <span class="text-sm">{{ label }}</span>
+            </label>
+            {% endfor %}
+        </div>
+        {% if not form.mcp_servers.field.choices %}
+        <p class="text-xs text-base-content/40 mt-1">No MCP servers configured.</p>
+        {% endif %}
+    </fieldset>
+
+    <div class="modal-action mt-6">
+        <button type="button"
+                onclick="document.getElementById('agent-modal').close()"
+                class="btn btn-ghost btn-sm">
+            Cancel
+        </button>
+        <button type="submit"
+                class="btn btn-primary btn-sm"
+                hx-disabled-elt="this">
+            Save
+        </button>
+    </div>
+</form>

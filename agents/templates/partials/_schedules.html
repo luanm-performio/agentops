@@ -1,0 +1,34 @@
+<div class="max-w-5xl">
+
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-2xl font-bold">Schedules</h2>
+        <button class="btn btn-primary btn-sm"
+                hx-get="{% url 'schedule_create' %}"
+                hx-target="#modal-content"
+                hx-swap="innerHTML">
+            + New Schedule
+        </button>
+    </div>
+
+    <div id="schedule-list">
+        {% include "partials/_schedule_list.html" %}
+    </div>
+
+</div>
+
+<!-- Modal for create form -->
+<dialog id="agent-modal" class="modal">
+    <div class="modal-box w-11/12 max-w-2xl">
+        <div id="modal-content"></div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<script>
+    document.body.addEventListener('openModal', function () {
+        document.getElementById('agent-modal').showModal();
+    });
+    document.body.addEventListener('closeModal', function () {
+        document.getElementById('agent-modal').close();
+    });
+</script>

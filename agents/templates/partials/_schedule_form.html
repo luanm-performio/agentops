@@ -1,0 +1,81 @@
+<p class="text-lg font-bold mb-4">{{ modal_title }}</p>
+
+<form hx-post="{{ form_action }}"
+      hx-target="#modal-content"
+      hx-swap="innerHTML"
+      class="space-y-4">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+        <div role="alert" class="alert alert-error text-sm">
+            <span>{{ form.non_field_errors|first }}</span>
+        </div>
+    {% endif %}
+
+    <fieldset class="fieldset">
+        <legend class="fieldset-legend">Agent <span class="text-error">*</span></legend>
+        {{ form.agent }}
+        {% if form.agent.errors %}<p class="text-error text-xs mt-1">{{ form.agent.errors|first }}</p>{% endif %}
+    </fieldset>
+
+    <fieldset class="fieldset">
+        <legend class="fieldset-legend">Task <span class="text-error">*</span></legend>
+        {{ form.prompt }}
+        {% if form.prompt.errors %}<p class="text-error text-xs mt-1">{{ form.prompt.errors|first }}</p>{% endif %}
+    </fieldset>
+
+    <fieldset class="fieldset">
+        <legend class="fieldset-legend">Schedule Type <span class="text-error">*</span></legend>
+        {{ form.schedule_type }}
+    </fieldset>
+
+    <div id="interval-fields" class="fieldset">
+        <fieldset class="fieldset">
+            <legend class="fieldset-legend">Every (minutes)</legend>
+            {{ form.interval_minutes }}
+            <p class="text-xs text-base-content/40 mt-1">60 = hourly · 1440 = daily · 10080 = weekly</p>
+            {% if form.interval_minutes.errors %}<p class="text-error text-xs mt-1">{{ form.interval_minutes.errors|first }}</p>{% endif %}
+        </fieldset>
+    </div>
+
+    <div id="cron-fields" class="fieldset" style="display:none">
+        <fieldset class="fieldset">
+            <legend class="fieldset-legend">Cron Expression</legend>
+            {{ form.cron_expression }}
+            <p class="text-xs text-base-content/40 mt-1">
+                minute · hour · day · month · weekday &nbsp;|&nbsp;
+                <a href="https://crontab.guru" target="_blank" class="link">crontab.guru ↗</a>
+            </p>
+            {% if form.cron_expression.errors %}<p class="text-error text-xs mt-1">{{ form.cron_expression.errors|first }}</p>{% endif %}
+        </fieldset>
+    </div>
+
+    <fieldset class="fieldset">
+        <legend class="fieldset-legend">Active</legend>
+        <label class="flex items-center gap-2 cursor-pointer">
+            {{ form.is_active }}
+            <span class="text-sm">Start schedule immediately</span>
+        </label>
+    </fieldset>
+
+    <div class="modal-action mt-6">
+        <button type="button"
+                onclick="document.getElementById('agent-modal').close()"
+                class="btn btn-ghost btn-sm">
+            Cancel
+        </button>
+        <button type="submit" class="btn btn-primary btn-sm" hx-disabled-elt="this">
+            Save Schedule
+        </button>
+    </div>
+</form>
+
+<script>
+    function toggleScheduleFields(type) {
+        document.getElementById('interval-fields').style.display = type === 'interval' ? '' : 'none';
+        document.getElementById('cron-fields').style.display = type === 'cron' ? '' : 'none';
+    }
+    // Set initial state from current form value
+    const sel = document.getElementById('id_schedule_type');
+    if (sel) toggleScheduleFields(sel.value);
+</script>

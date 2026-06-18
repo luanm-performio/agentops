@@ -1,0 +1,21 @@
+{% for s in sessions %}
+<a href="{% url 'chat_detail' s.pk %}"
+   hx-get="{% url 'chat_detail' s.pk %}"
+   hx-target="#content"
+   hx-swap="innerHTML"
+   hx-push-url="true"
+   class="group flex flex-col px-3 py-2.5 border-b border-base-200 hover:bg-base-200 transition-colors cursor-pointer
+          {% if session and session.pk == s.pk %}bg-primary/10 border-l-2 border-l-primary{% endif %}">
+    <span class="text-sm font-medium truncate text-base-content">
+        {{ s.title|default:"New conversation" }}
+    </span>
+    <div class="flex items-center gap-1.5 mt-0.5">
+        {% if s.agent %}
+        <span class="text-xs text-base-content/40 truncate">{{ s.agent.name }}</span>
+        {% endif %}
+        <span class="text-xs text-base-content/30 ml-auto shrink-0">{{ s.updated_at|timesince }} ago</span>
+    </div>
+</a>
+{% empty %}
+<p class="text-xs text-base-content/30 px-4 py-6 text-center">No chats yet.</p>
+{% endfor %}

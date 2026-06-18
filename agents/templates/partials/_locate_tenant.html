@@ -1,0 +1,138 @@
+<div class="max-w-5xl">
+
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-2xl font-bold">Locate Tenant</h2>
+        {% if has_searched and not error %}
+        <span class="badge badge-neutral">{{ results|length }} found</span>
+        {% endif %}
+    </div>
+
+    <form method="post"
+          action="{% url 'locate_tenant' %}"
+          hx-post="{% url 'locate_tenant' %}"
+          hx-target="#content"
+          hx-swap="innerHTML"
+          hx-indicator="#locate-tenant-spinner"
+          hx-disabled-elt="button[type='submit']"
+          class="flex flex-wrap items-end gap-3 mb-5 p-4 bg-base-100 rounded-xl border border-base-300">
+        {% csrf_token %}
+        <div class="form-control flex-1 min-w-72">
+            <label class="label py-0 pb-1" for="host-name">
+                <span class="label-text text-xs">Host name</span>
+            </label>
+            <input id="host-name"
+                   name="host_name"
+                   value="{{ host_name }}"
+                   class="input input-bordered w-full"
+                   placeholder="acme"
+                   autocomplete="off"
+                   autofocus>
+        </div>
+
+        <button type="submit" class="btn btn-primary">
+            Search
+            <span id="locate-tenant-spinner" class="loading loading-spinner loading-xs htmx-indicator"></span>
+        </button>
+    </form>
+
+    {% if error %}
+    <div class="alert alert-error mb-5">
+        <span>{{ error }}</span>
+    </div>
+    {% endif %}
+
+    {% if results %}
+    <div class="overflow-x-auto rounded-xl border border-base-300 bg-base-100">
+        <table class="table table-zebra w-full">
+            <thead>
+                <tr>
+                    <th class="w-10"></th>
+                    <th>Name</th>
+                    <th>Shard hosts</th>
+                    <th>Database server</th>
+                    <th>Schema</th>
+                    <th>Region</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for result in results %}
+                <tr class="hover">
+                    <td>
+                        {% include "partials/_copy_button.html" with copy_value=result.copy_text label="Copy row" only %}
+                    </td>
+                    <td class="font-medium whitespace-nowrap">
+                        <div class="flex items-center gap-1">
+                            <span>{{ result.name|default:"-" }}</span>
+                            {% include "partials/_copy_button.html" with copy_value=result.name label="Copy name" only %}
+                        </div>
+                    </td>
+                    <td class="max-w-sm">
+                        <div class="flex items-center gap-1">
+                            <span class="block truncate" title="{{ result.shard_hosts }}">{{ result.shard_hosts }}</span>
+                            {% include "partials/_copy_button.html" with copy_value=result.shard_hosts label="Copy shard hosts" only %}
+                        </div>
+                    </td>
+                    <td class="font-mono text-xs whitespace-nowrap">
+                        <div class="flex items-center gap-1">
+                            <span>{{ result.database_server_url }}</span>
+                            {% include "partials/_copy_button.html" with copy_value=result.database_server_url label="Copy database server" only %}
+                        </div>
+                    </td>
+                    <td class="font-mono text-xs whitespace-nowrap">
+                        <div class="flex items-center gap-1">
+                            <span>{{ result.schema_name }}</span>
+                            {% include "partials/_copy_button.html" with copy_value=result.schema_name label="Copy schema" only %}
+                        </div>
+                    </td>
+                    <td class="font-mono text-xs whitespace-nowrap">
+                        <div class="flex items-center gap-1">
+                            <span>{{ result.region|default:"-" }}</span>
+                            {% include "partials/_copy_button.html" with copy_value=result.region label="Copy region" only %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% elif has_searched and not error %}
+    <div class="text-center py-16 text-base-content/50">
+        <p class="text-sm">No tenants found for "{{ host_name }}".</p>
+    </div>
+    {% else %}
+    <div class="text-center py-16 text-base-content/40">
+        <p class="text-sm">Enter a host name to locate its tenant database.</p>
+    </div>
+    {% endif %}
+
+</div>
+
+<script>
+    window.copyTenantLookupValue = window.copyTenantLookupValue || async function (button) {
+        const value = button.dataset.copyValue || "";
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(value);
+            } else {
+                const textarea = document.createElement("textarea");
+                textarea.value = value;
+                textarea.setAttribute("readonly", "");
+                textarea.style.position = "fixed";
+                textarea.style.left = "-9999px";
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand("copy");
+                document.body.removeChild(textarea);
+            }
+            button.classList.add("btn-success");
+            window.setTimeout(function () {
+                button.classList.remove("btn-success");
+            }, 900);
+        } catch (error) {
+            button.classList.add("btn-error");
+            window.setTimeout(function () {
+                button.classList.remove("btn-error");
+            }, 1200);
+        }
+    };
+</script>

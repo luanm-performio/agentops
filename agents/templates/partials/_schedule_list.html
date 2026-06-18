@@ -1,0 +1,76 @@
+{% if schedules %}
+<div class="overflow-x-auto">
+    <table class="table table-sm">
+        <thead>
+            <tr class="border-base-300">
+                <th>Agent</th>
+                <th>Task</th>
+                <th>Schedule</th>
+                <th>Status</th>
+                <th>Last Run</th>
+                <th>Last Result</th>
+                <th class="w-28"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in schedules %}
+            <tr class="hover:bg-base-200">
+                <td class="font-medium">{{ s.agent.name }}</td>
+                <td class="text-base-content/60 max-w-xs truncate text-xs">{{ s.prompt }}</td>
+                <td class="font-mono text-xs">{{ s.schedule_display }}</td>
+                <td>
+                    {% if s.is_active %}
+                        <span class="badge badge-success badge-sm">Active</span>
+                    {% else %}
+                        <span class="badge badge-ghost badge-sm">Paused</span>
+                    {% endif %}
+                </td>
+                <td class="text-xs text-base-content/50">
+                    {% if s.last_run %}{{ s.last_run|date:"M d, H:i" }}{% else %}Never{% endif %}
+                </td>
+                <td>
+                    {% if s.last_run_pk %}
+                        {% if s.last_run_status == "completed" %}
+                            <span class="badge badge-success badge-xs">ok</span>
+                        {% elif s.last_run_status == "failed" %}
+                            <span class="badge badge-error badge-xs">failed</span>
+                        {% else %}
+                            <span class="badge badge-info badge-xs">running</span>
+                        {% endif %}
+                        <a href="{% url 'run_detail' s.last_run_pk %}"
+                           hx-get="{% url 'run_detail' s.last_run_pk %}"
+                           hx-target="#content"
+                           hx-swap="innerHTML"
+                           hx-push-url="true"
+                           class="link link-hover text-xs ml-1">view</a>
+                    {% else %}
+                        <span class="text-base-content/30 text-xs">—</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <div class="flex gap-1">
+                        <button class="btn btn-ghost btn-xs"
+                                hx-post="{% url 'schedule_toggle' s.pk %}"
+                                hx-confirm="{% if s.is_active %}Pause this schedule?{% else %}Resume this schedule?{% endif %}">
+                            {% if s.is_active %}Pause{% else %}Resume{% endif %}
+                        </button>
+                        <button class="btn btn-ghost btn-xs text-error"
+                                hx-post="{% url 'schedule_delete' s.pk %}"
+                                hx-confirm="Delete this schedule?">
+                            Delete
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="text-center py-20 text-base-content/30">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+    <p class="text-sm">No schedules yet. Create one to automate agent runs.</p>
+</div>
+{% endif %}

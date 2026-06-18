@@ -1,0 +1,28 @@
+<p class="font-bold text-lg mb-4">New Chat</p>
+
+<form hx-post="{% url 'chat_new' %}"
+      hx-target="body"
+      hx-swap="none"
+      class="space-y-4">
+    {% csrf_token %}
+
+    <fieldset class="fieldset">
+        <legend class="fieldset-legend">Agent (optional)</legend>
+        <select name="agent_id" class="select select-bordered w-full select-sm">
+            <option value="">No agent — plain conversation</option>
+            {% for agent in agents %}
+            <option value="{{ agent.pk }}">{{ agent.name }}</option>
+            {% endfor %}
+        </select>
+        <p class="fieldset-label">The agent's system prompt will guide the conversation.</p>
+    </fieldset>
+
+    <div class="modal-action mt-4">
+        <button type="button"
+                onclick="document.getElementById('new-chat-modal').close()"
+                class="btn btn-ghost btn-sm">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm" hx-disabled-elt="this">
+            Start Chat
+        </button>
+    </div>
+</form>

@@ -1,0 +1,7 @@
+[shell_environment_policy]
+inherit = "core"
+
+[shell_environment_policy.set]
+INSIDE_CLAUDE_CODE = "1"
+BASH_DEFAULT_TIMEOUT_MS = "420000"
+BASH_MAX_TIMEOUT_MS = "420000"

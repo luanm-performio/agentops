@@ -1,0 +1,157 @@
+<div class="max-w-5xl">
+
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-2xl font-bold">Run History</h2>
+        <span class="badge badge-neutral">{{ page.paginator.count }} total</span>
+    </div>
+
+    <!-- Filters -->
+    <form hx-get="{% url 'runs' %}"
+          hx-target="#content"
+          hx-swap="innerHTML"
+          hx-push-url="true"
+          class="flex flex-wrap items-end gap-3 mb-5 p-4 bg-base-100 rounded-xl border border-base-300">
+
+        <div class="form-control min-w-40">
+            <label class="label py-0 pb-1"><span class="label-text text-xs">Agent</span></label>
+            <select name="agent" class="select select-bordered select-sm">
+                <option value="">All agents</option>
+                {% for a in agents %}
+                <option value="{{ a.pk }}" {% if current_agent == a.pk|stringformat:"s" %}selected{% endif %}>{{ a.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-control">
+            <label class="label py-0 pb-1"><span class="label-text text-xs">From</span></label>
+            <input type="date" name="date_from" value="{{ current_date_from }}" class="input input-bordered input-sm">
+        </div>
+
+        <div class="form-control">
+            <label class="label py-0 pb-1"><span class="label-text text-xs">To</span></label>
+            <input type="date" name="date_to" value="{{ current_date_to }}" class="input input-bordered input-sm">
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+
+        {% if is_filtered %}
+        <a hx-get="{% url 'runs' %}"
+           hx-target="#content"
+           hx-swap="innerHTML"
+           hx-push-url="true"
+           class="btn btn-ghost btn-sm">Clear</a>
+        {% endif %}
+    </form>
+
+    {% if page.object_list %}
+    <div class="overflow-x-auto rounded-xl border border-base-300">
+        <table class="table table-zebra w-full">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Agent</th>
+                    <th>Triggered by</th>
+                    <th>Prompt</th>
+                    <th>Status</th>
+                    <th>Started</th>
+                    <th>Duration</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for run in page.object_list %}
+                <tr class="hover">
+                    <td class="text-base-content/50 text-xs">{{ run.pk }}</td>
+                    <td class="font-medium">{{ run.agent.name }}</td>
+                    <td>
+                        {% if run.schedule %}
+                            <span class="badge badge-outline badge-sm">schedule</span>
+                            <span class="text-xs text-base-content/60">{{ run.schedule.schedule_display }}</span>
+                        {% else %}
+                            <span class="badge badge-outline badge-sm">manual</span>
+                        {% endif %}
+                    </td>
+                    <td class="max-w-xs">
+                        <span class="truncate block text-sm text-base-content/80" title="{{ run.prompt }}">
+                            {{ run.prompt|truncatechars:60 }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if run.status == "running" %}
+                            <span class="badge badge-info badge-sm">Running</span>
+                        {% elif run.status == "completed" %}
+                            <span class="badge badge-success badge-sm">Completed</span>
+                        {% else %}
+                            <span class="badge badge-error badge-sm">Failed</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-xs text-base-content/60 whitespace-nowrap">{{ run.started_at|date:"Y-m-d H:i" }}</td>
+                    <td class="text-xs text-base-content/60 whitespace-nowrap">
+                        {% if run.duration_seconds is not None %}{{ run.duration_seconds }}s{% else %}—{% endif %}
+                    </td>
+                    <td>
+                        <a href="{% url 'run_detail' run.pk %}"
+                           hx-get="{% url 'run_detail' run.pk %}"
+                           hx-target="#content"
+                           hx-swap="innerHTML"
+                           hx-push-url="true"
+                           class="btn btn-ghost btn-xs">View</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if page.has_other_pages %}
+    <div class="flex items-center justify-center gap-2 mt-5">
+
+        {% if page.has_previous %}
+        <a hx-get="{% url 'runs' %}?{{ filter_qs }}{% if filter_qs %}&{% endif %}page={{ page.previous_page_number }}"
+           hx-target="#content" hx-swap="innerHTML" hx-push-url="true"
+           class="btn btn-sm btn-ghost">← Prev</a>
+        {% else %}
+        <button class="btn btn-sm btn-ghost btn-disabled">← Prev</button>
+        {% endif %}
+
+        <div class="flex gap-1">
+            {% for num in page.paginator.page_range %}
+                {% if num == page.number %}
+                <button class="btn btn-sm btn-primary">{{ num }}</button>
+                {% elif num == 1 or num == page.paginator.num_pages or num >= page.number|add:"-2" and num <= page.number|add:"2" %}
+                <a hx-get="{% url 'runs' %}?{{ filter_qs }}{% if filter_qs %}&{% endif %}page={{ num }}"
+                   hx-target="#content" hx-swap="innerHTML" hx-push-url="true"
+                   class="btn btn-sm btn-ghost">{{ num }}</a>
+                {% elif num == page.number|add:"-3" or num == page.number|add:"3" %}
+                <button class="btn btn-sm btn-ghost btn-disabled">…</button>
+                {% endif %}
+            {% endfor %}
+        </div>
+
+        {% if page.has_next %}
+        <a hx-get="{% url 'runs' %}?{{ filter_qs }}{% if filter_qs %}&{% endif %}page={{ page.next_page_number }}"
+           hx-target="#content" hx-swap="innerHTML" hx-push-url="true"
+           class="btn btn-sm btn-ghost">Next →</a>
+        {% else %}
+        <button class="btn btn-sm btn-ghost btn-disabled">Next →</button>
+        {% endif %}
+
+    </div>
+    <p class="text-center text-xs text-base-content/40 mt-2">
+        Page {{ page.number }} of {{ page.paginator.num_pages }} &mdash; {{ page.paginator.count }} run{{ page.paginator.count|pluralize }}
+    </p>
+    {% endif %}
+
+    {% else %}
+    <div class="text-center py-16 text-base-content/40">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-3 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+        <p class="text-sm">
+            {% if is_filtered %}No runs match the current filters.{% else %}No runs yet. Run an agent from the Agents page.{% endif %}
+        </p>
+    </div>
+    {% endif %}
+
+</div>
