@@ -1,6 +1,6 @@
 {% load static %}
 <!doctype html>
-<html data-theme="corporate">
+<html data-theme="corporate" class="h-full">
     <head>
         <title>Agent Console</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -11,18 +11,18 @@
         <script src="https://cdn.jsdelivr.net/npm/htmx-ext-sse@2.2.2/sse.js"></script>
     </head>
 
-    <body class="h-screen bg-base-200" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+    <body class="h-full overflow-hidden bg-base-200" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
 
         <!-- Thin loading bar shown during HTMX requests -->
         <div id="page-loader"
              class="htmx-indicator fixed top-0 left-0 w-full h-0.5 bg-primary z-[100]"></div>
 
-        <div class="drawer lg:drawer-open h-full">
+        <div class="drawer lg:drawer-open h-full min-h-0">
             <input id="sidebar-drawer" type="checkbox" class="drawer-toggle" />
 
-            <div class="drawer-content flex flex-col">
+            <div class="drawer-content flex min-h-0 flex-col">
                 <!-- Navbar -->
-                <div class="navbar bg-base-100 border-b border-base-300 shadow-sm">
+                <div class="navbar flex-none bg-base-100 border-b border-base-300 shadow-sm">
                     <div class="flex-none lg:hidden">
                         <label for="sidebar-drawer" class="btn btn-square btn-ghost">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-5 h-5 stroke-current">
@@ -35,15 +35,17 @@
                     </div>
                 </div>
 
-                <main id="content" class="flex-1 {% block main_class %}p-6 overflow-auto{% endblock %}" data-default-class="flex-1 p-6 overflow-auto">
+                <main id="content"
+                      class="flex-1 min-h-0 {% block main_class %}p-6 overflow-auto{% endblock %}"
+                      data-default-class="flex-1 min-h-0 p-6 overflow-auto">
                     {% block content %}{% endblock %}
                 </main>
             </div>
 
             <!-- Sidebar -->
-            <div class="drawer-side z-40">
+            <div class="drawer-side z-40 h-full">
                 <label for="sidebar-drawer" class="drawer-overlay"></label>
-                <aside class="w-64 bg-neutral text-neutral-content min-h-full flex flex-col">
+                <aside class="w-64 h-full min-h-0 bg-neutral text-neutral-content flex flex-col">
 
                     <!-- Brand -->
                     <div class="px-5 py-4 border-b border-white/10">
@@ -54,11 +56,12 @@
                     {% url 'dashboard' as url_dashboard %}
                     {% url 'agents' as url_agents %}
                     {% url 'locate_tenant' as url_locate_tenant %}
+                    {% url 'squelch' as url_squelch %}
                     {% url 'schedules' as url_schedules %}
                     {% url 'runs' as url_runs %}
                     {% url 'chat_list' as url_chats %}
 
-                    <ul class="flex-1 p-3 space-y-0.5 text-sm">
+                    <ul class="flex-1 min-h-0 overflow-y-auto p-3 space-y-0.5 text-sm">
                         <li>
                             <a href="{{ url_dashboard }}"
                                hx-get="{{ url_dashboard }}"
@@ -89,6 +92,22 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35m1.35-5.15a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z" />
                                 </svg>
                                 Locate Tenant
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ url_squelch }}"
+                               hx-get="{{ url_squelch }}"
+                               hx-target="#content"
+                               hx-swap="innerHTML"
+                               hx-push-url="true"
+                               hx-indicator="#page-loader"
+                               data-navpath="{{ url_squelch }}"
+                               class="flex items-center gap-3 px-3 py-2 rounded-lg transition-colors
+                                      {% if request.path == url_squelch %}bg-white/15 text-neutral-content{% else %}text-neutral-content/70 hover:bg-white/10 hover:text-neutral-content{% endif %}">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 7c0 1.657 3.582 3 8 3s8-1.343 8-3M4 7c0-1.657 3.582-3 8-3s8 1.343 8 3M4 7v10c0 1.657 3.582 3 8 3s8-1.343 8-3V7M4 12c0 1.657 3.582 3 8 3s8-1.343 8-3" />
+                                </svg>
+                                Squelch
                             </a>
                         </li>
                         <li>
@@ -158,7 +177,7 @@
                     </ul>
 
                     <!-- User section at bottom -->
-                    <div class="p-3 border-t border-white/10">
+                    <div class="shrink-0 p-3 border-t border-white/10">
                         <div class="dropdown dropdown-top w-full">
                             <div tabindex="0" role="button"
                                  class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/10 cursor-pointer transition-colors w-full">
@@ -208,7 +227,7 @@
                 const content = document.getElementById('content');
                 const marker = content.querySelector('[data-content-class]');
                 content.className = marker
-                    ? ('flex-1 ' + marker.dataset.contentClass)
+                    ? ('flex-1 min-h-0 ' + marker.dataset.contentClass)
                     : content.dataset.defaultClass;
             });
         </script>

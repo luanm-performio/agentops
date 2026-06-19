@@ -1,0 +1,139 @@
+<div class="max-w-6xl">
+
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-2xl font-bold">Squelch</h2>
+        {% if has_searched and not error and result %}
+        <span class="badge badge-neutral">{{ result.row_count }} row{{ result.row_count|pluralize }}</span>
+        {% endif %}
+    </div>
+
+    <form method="post"
+          action="{% url 'squelch' %}"
+          hx-post="{% url 'squelch' %}"
+          hx-target="#content"
+          hx-swap="innerHTML"
+          hx-indicator="#squelch-spinner"
+          hx-disabled-elt="button[type='submit']"
+          class="space-y-4 mb-5 p-4 bg-base-100 rounded-xl border border-base-300">
+        {% csrf_token %}
+
+        <div class="form-control">
+            <label class="label py-0 pb-1" for="squelch-host-name">
+                <span class="label-text text-xs">Host name</span>
+            </label>
+            <input id="squelch-host-name"
+                   name="host_name"
+                   value="{{ host_name }}"
+                   class="input input-bordered w-full"
+                   placeholder="Leave blank for all tenants"
+                   autocomplete="off"
+                   autofocus>
+        </div>
+
+        <div class="form-control">
+            <label class="label py-0 pb-1" for="squelch-query">
+                <span class="label-text text-xs">Query</span>
+            </label>
+            <textarea id="squelch-query"
+                      name="query"
+                      class="textarea textarea-bordered font-mono min-h-40 w-full"
+                      placeholder="select * from ...">{{ query }}</textarea>
+        </div>
+
+        <div class="flex flex-wrap items-end gap-3">
+            <div class="form-control min-w-64">
+                <label class="label py-0 pb-1" for="squelch-regions">
+                    <span class="label-text text-xs">Regions</span>
+                </label>
+                <select id="squelch-regions"
+                        name="regions"
+                        multiple
+                        size="{{ available_regions|length }}"
+                        class="select select-bordered min-h-24">
+                    {% for region in available_regions %}
+                    <option value="{{ region }}" {% if region in selected_regions %}selected{% endif %}>{{ region }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <button type="submit" class="btn btn-primary">
+                Search
+                <span id="squelch-spinner" class="loading loading-spinner loading-xs htmx-indicator"></span>
+            </button>
+        </div>
+    </form>
+
+    {% if error %}
+    <div class="alert alert-error mb-5">
+        <span>{{ error }}</span>
+    </div>
+    {% endif %}
+
+    {% if result and result.rows %}
+    <div class="flex flex-wrap items-end justify-between gap-3 mb-3">
+        <div class="form-control min-w-72">
+            <label class="label py-0 pb-1" for="squelch-result-filter">
+                <span class="label-text text-xs">Filter results</span>
+            </label>
+            <input id="squelch-result-filter"
+                   class="input input-bordered input-sm"
+                   placeholder="Type to filter rows"
+                   autocomplete="off"
+                   oninput="window.filterSquelchResults(this.value)">
+        </div>
+
+        <form method="post" action="{% url 'squelch_export' %}">
+            {% csrf_token %}
+            <input type="hidden" name="host_name" value="{{ host_name }}">
+            <input type="hidden" name="query" value="{{ query }}">
+            {% for region in selected_regions %}
+            <input type="hidden" name="regions" value="{{ region }}">
+            {% endfor %}
+            <button type="submit" class="btn btn-outline btn-sm">
+                Export Excel
+            </button>
+        </form>
+    </div>
+
+    <div class="overflow-x-auto rounded-xl border border-base-300 bg-base-100">
+        <table id="squelch-results-table" class="table table-zebra w-full">
+            <thead>
+                <tr>
+                    {% for column in result.columns %}
+                    <th>{{ column }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in result.rows %}
+                <tr class="hover">
+                    {% for value in row.values %}
+                    <td class="whitespace-nowrap">{{ value }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% elif has_searched and not error %}
+    <div class="text-center py-16 text-base-content/50">
+        <p class="text-sm">No rows returned.</p>
+    </div>
+    {% else %}
+    <div class="text-center py-16 text-base-content/40">
+        <p class="text-sm">Enter a query and choose one or more regions.</p>
+    </div>
+    {% endif %}
+
+</div>
+
+<script>
+    window.filterSquelchResults = function (value) {
+        const table = document.getElementById("squelch-results-table");
+        if (!table) return;
+        const needle = value.trim().toLowerCase();
+        table.querySelectorAll("tbody tr").forEach(function (row) {
+            row.classList.toggle("hidden", needle && !row.innerText.toLowerCase().includes(needle));
+        });
+    };
+</script>

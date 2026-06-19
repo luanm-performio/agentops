@@ -85,47 +85,51 @@ class Tunnel:
             self._ssh_tunnel.stop()
 
 
+def find_tenant_data_sources(host_name: str, regions: list[Region]) -> list[DataSource]:
+    search = host_name.strip()
+    data_sources = []
+    for region in regions:
+        global_data_source = DataSource(
+            username=region.username,
+            password=region.password,
+            database_server_url=region.remote_bind_address,
+            schema_name="performancecentre_global",
+        )
+        try:
+            with Tunnel(global_data_source, region) as engine:
+                with engine.connect() as connection:
+                    metadata = MetaData()
+                    data_source = Table("data_source", metadata, autoload_with=engine)
+                    query = select(data_source)
+                    if search:
+                        query = query.where(
+                            data_source.c.shard_hosts.like(f"%{search}%")
+                        )
+                    rows = connection.execute(query).mappings()
+
+                    region_data_sources = [
+                        DataSource(
+                            shard_hosts=row["shard_hosts"],
+                            username=row["username"],
+                            password=row["password"],
+                            database_server_url=row["database_server_url"],
+                            schema_name=row["schema_name"],
+                            region=region,
+                            name=region.name,
+                        )
+                        for row in rows
+                    ]
+
+                    if region_data_sources:
+                        data_sources += region_data_sources
+        except Exception as e:
+            print(f"Skipping {region.name or region.remote_bind_address}: {e}")
+
+    return data_sources
+
+
 class Tenant:
     def find_by_host_name(
         self, host_name: str, regions: list[Region]
     ) -> list[DataSource]:
-
-        data_sources = []
-        for region in regions:
-            global_data_source = DataSource(
-                username=region.username,
-                password=region.password,
-                database_server_url=region.remote_bind_address,
-                schema_name="performancecentre_global",
-            )
-            try:
-                with Tunnel(global_data_source, region) as engine:
-                    with engine.connect() as connection:
-                        metadata = MetaData()
-                        data_source = Table(
-                            "data_source", metadata, autoload_with=engine
-                        )
-                        query = select(data_source).where(
-                            data_source.c.shard_hosts.like(f"%{host_name}%")
-                        )
-                        rows = connection.execute(query).mappings()
-
-                        region_data_sources = [
-                            DataSource(
-                                shard_hosts=row["shard_hosts"],
-                                username=row["username"],
-                                password=row["password"],
-                                database_server_url=row["database_server_url"],
-                                schema_name=row["schema_name"],
-                                region=region,
-                                name=region.name,
-                            )
-                            for row in rows
-                        ]
-
-                        if region_data_sources:
-                            data_sources += region_data_sources
-            except Exception as e:
-                print(f"Skipping {region.name or region.remote_bind_address}: {e}")
-
-        return data_sources
+        return find_tenant_data_sources(host_name, regions)

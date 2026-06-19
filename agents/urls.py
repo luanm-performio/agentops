@@ -6,6 +6,9 @@ urlpatterns = [
     path("", views.dashboard, name="dashboard"),
     # Locate tenant
     path("locate-tenant/", views.locate_tenant, name="locate_tenant"),
+    # Squelch
+    path("squelch/", views.squelch, name="squelch"),
+    path("squelch/export.xlsx", views.squelch_export, name="squelch_export"),
     # Agents
     path("agents/", views.agents, name="agents"),
     path("agents/create/", views.agent_create, name="agent_create"),
