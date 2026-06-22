@@ -12,5 +12,10 @@ wheels/
 # Local development database
 db.sqlite3
 
+# Docker-mounted application data
+data/*
+!data/.gitkeep
+
 # Tool credentials — copy config.yaml.example → config.yaml and fill in real values
 tools/config.yaml
+node_modules
