@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     "django_htmx",
     "django_q",
     "users",
+    "ops",
     "agents",
 ]
 
@@ -109,7 +110,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = "UTC"
+TIME_ZONE = "Australia/Sydney"
 
 USE_I18N = True
 
@@ -127,8 +128,8 @@ Q_CLUSTER = {
     "name": "agent_ops_cluster",
     "workers": 4,
     "recycle": 500,
-    "timeout": 600,      # 10 min — agent runs can be slow
-    "retry": 660,        # must exceed timeout to avoid premature retrigger
+    "timeout": 10800,    # three hours for remote backup, transfer, and import
+    "retry": 10860,      # must exceed timeout to avoid duplicate execution
     "ack_failures": True, # mark timed-out/crashed tasks as failures (visible in DB)
     "compress": True,
     "orm": "default",

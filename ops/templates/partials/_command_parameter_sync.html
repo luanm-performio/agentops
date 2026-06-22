@@ -1,0 +1,78 @@
+<script>
+    window.syncCommandParameterForm = function(formId, defaultsId) {
+        const form = document.getElementById(formId);
+        const defaultsElement = document.getElementById(defaultsId);
+        if (!form || !defaultsElement) return;
+
+        const commandDefaults = JSON.parse(defaultsElement.textContent);
+        const commandSelect = form.elements.namedItem('command_key');
+        const paramsText = form.elements.namedItem('params_text');
+        const parameterContainers = form.querySelectorAll('[data-command-param]');
+        const commandOnlyElements = form.querySelectorAll('[data-command-only]');
+
+        const selectedDefaults = () => commandDefaults[commandSelect.value] || {};
+        const parseParameters = () => {
+            try {
+                const parameters = JSON.parse(paramsText.value);
+                return parameters && typeof parameters === 'object' && !Array.isArray(parameters)
+                    ? parameters
+                    : null;
+            } catch (error) {
+                return null;
+            }
+        };
+        const updateVisibility = () => {
+            const defaults = selectedDefaults();
+            parameterContainers.forEach((container) => {
+                container.hidden = !Object.prototype.hasOwnProperty.call(
+                    defaults,
+                    container.dataset.commandParam
+                );
+            });
+            commandOnlyElements.forEach((element) => {
+                element.hidden = element.dataset.commandOnly !== commandSelect.value;
+            });
+        };
+        const syncInputsFromJson = () => {
+            const parameters = parseParameters();
+            if (!parameters) return;
+            parameterContainers.forEach((container) => {
+                const key = container.dataset.commandParam;
+                const input = form.elements.namedItem(key);
+                if (input && Object.prototype.hasOwnProperty.call(parameters, key)) {
+                    input.value = parameters[key] ?? '';
+                }
+            });
+        };
+        const syncJsonFromInputs = () => {
+            const parameters = parseParameters();
+            if (!parameters) return;
+            const defaults = selectedDefaults();
+            parameterContainers.forEach((container) => {
+                const key = container.dataset.commandParam;
+                const input = form.elements.namedItem(key);
+                if (input && Object.prototype.hasOwnProperty.call(defaults, key)) {
+                    parameters[key] = input.value;
+                }
+            });
+            paramsText.value = JSON.stringify(parameters, null, 2);
+        };
+
+        commandSelect.addEventListener('change', () => {
+            const parameters = structuredClone(selectedDefaults());
+            paramsText.value = JSON.stringify(parameters, null, 2);
+            updateVisibility();
+            syncInputsFromJson();
+        });
+        parameterContainers.forEach((container) => {
+            const input = form.elements.namedItem(container.dataset.commandParam);
+            if (input) input.addEventListener('input', syncJsonFromInputs);
+        });
+        paramsText.addEventListener('input', syncInputsFromJson);
+
+        updateVisibility();
+        syncJsonFromInputs();
+    };
+
+    window.syncCommandParameterForm('{{ form_id|escapejs }}', '{{ defaults_id|escapejs }}');
+</script>

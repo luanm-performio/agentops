@@ -1,0 +1,87 @@
+<div class="max-w-6xl">
+
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-2xl font-bold">Commands</h2>
+        <div class="flex gap-2">
+            <button class="btn btn-primary btn-sm"
+                    hx-get="{% url 'command_run_create' %}"
+                    hx-target="#command-modal-content"
+                    hx-swap="innerHTML">
+                Run Command
+            </button>
+            <button class="btn btn-outline btn-sm"
+                    hx-get="{% url 'command_schedule_create' %}"
+                    hx-target="#command-modal-content"
+                    hx-swap="innerHTML">
+                Schedule
+            </button>
+        </div>
+    </div>
+
+    <div class="grid gap-3 md:grid-cols-2 mb-8">
+        {% for command in commands %}
+        <div class="bg-base-100 rounded-xl border border-base-300 p-4">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <h3 class="font-semibold">{{ command.label }}</h3>
+                    <p class="text-sm text-base-content/60 mt-1">{{ command.description }}</p>
+                    <p class="font-mono text-xs text-base-content/40 mt-2">{{ command.key }}</p>
+                </div>
+                <div class="flex gap-1 shrink-0">
+                    <button class="btn btn-primary btn-xs"
+                            hx-get="{% url 'command_run_create' %}?command={{ command.key }}"
+                            hx-target="#command-modal-content"
+                            hx-swap="innerHTML">
+                        Run
+                    </button>
+                    {% if command.schedulable %}
+                    <button class="btn btn-ghost btn-xs"
+                            hx-get="{% url 'command_schedule_create' %}?command={{ command.key }}"
+                            hx-target="#command-modal-content"
+                            hx-swap="innerHTML">
+                        Schedule
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="grid gap-8 xl:grid-cols-2">
+        <section>
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-semibold">Schedules</h3>
+            </div>
+            <div id="command-schedule-list">
+                {% include "partials/_command_schedule_list.html" %}
+            </div>
+        </section>
+
+        <section>
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-semibold">Recent Runs</h3>
+            </div>
+            <div id="command-run-list">
+                {% include "partials/_command_run_list.html" %}
+            </div>
+        </section>
+    </div>
+
+</div>
+
+<dialog id="command-modal" class="modal">
+    <div class="modal-box w-11/12 max-w-3xl">
+        <div id="command-modal-content"></div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<script>
+    document.body.addEventListener('openCommandModal', function () {
+        document.getElementById('command-modal').showModal();
+    });
+    document.body.addEventListener('closeCommandModal', function () {
+        document.getElementById('command-modal').close();
+    });
+</script>

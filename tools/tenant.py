@@ -1,4 +1,5 @@
 from dataclasses import dataclass, fields
+from urllib.parse import urlsplit
 
 from sqlalchemy import Engine, MetaData, Table, create_engine, select
 from sqlalchemy.pool import NullPool
@@ -34,6 +35,16 @@ def construct_uri(data_source: DataSource) -> str:
     return f"mysql+pymysql://{data_source.username}:{data_source.password}@{data_source.database_server_url}/{data_source.schema_name}"
 
 
+def _database_server_address(
+    database_server_url: str,
+    default_port: int,
+) -> tuple[str, int]:
+    parsed = urlsplit(f"//{database_server_url.strip()}")
+    if parsed.hostname is None:
+        raise ValueError(f"Invalid database server URL: {database_server_url}")
+    return parsed.hostname, parsed.port or default_port
+
+
 class Tunnel:
     """Context manager that returns a SQLAlchemy Engine, routing via SSH, VPN, or direct."""
 
@@ -43,11 +54,15 @@ class Tunnel:
         self._ssh_tunnel: SSHTunnel | None = None
 
     def __enter__(self) -> Engine:
+        remote_host, remote_port = _database_server_address(
+            self.data_source.database_server_url,
+            self.region.remote_bind_port,
+        )
         if self.region.devbox_required and self.region.devbox:
             self._ssh_tunnel = SSHTunnel(
                 dev_box=self.region.devbox,
-                remote_host=self.region.remote_bind_address,
-                remote_port=self.region.remote_bind_port,
+                remote_host=remote_host,
+                remote_port=remote_port,
             )
             local = self._ssh_tunnel.start()
             ds = DataSource(
@@ -71,7 +86,8 @@ class Tunnel:
             if self.region.virtual_network_id:
                 switch_vnet(
                     self.region.virtual_network_id,
-                    probe_host=self.region.remote_bind_address,
+                    probe_host=remote_host,
+                    probe_port=remote_port,
                 )
             self.engine = create_engine(
                 construct_uri(self.data_source), poolclass=NullPool
@@ -110,8 +126,8 @@ def find_tenant_data_sources(host_name: str, regions: list[Region]) -> list[Data
                     region_data_sources = [
                         DataSource(
                             shard_hosts=row["shard_hosts"],
-                            username=row["username"],
-                            password=row["password"],
+                            username=region.username,
+                            password=region.password,
                             database_server_url=row["database_server_url"],
                             schema_name=row["schema_name"],
                             region=region,

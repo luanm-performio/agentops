@@ -1,0 +1,44 @@
+<div class="max-w-5xl">
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h2 class="text-2xl font-bold">Command Run #{{ run.pk }}</h2>
+            <p class="font-mono text-xs text-base-content/50 mt-1">{{ run.command_key }}</p>
+        </div>
+        <a href="{% url 'commands' %}"
+           hx-get="{% url 'commands' %}"
+           hx-target="#content"
+           hx-swap="innerHTML"
+           hx-push-url="true"
+           class="btn btn-ghost btn-sm">Back</a>
+    </div>
+
+    <div class="grid gap-4 md:grid-cols-3 mb-5">
+        <div class="bg-base-100 rounded-xl border border-base-300 p-4">
+            <p class="text-xs text-base-content/50">Status</p>
+            <p class="font-semibold">{{ run.get_status_display }}</p>
+        </div>
+        <div class="bg-base-100 rounded-xl border border-base-300 p-4">
+            <p class="text-xs text-base-content/50">Started</p>
+            <p class="font-semibold">{% if run.started_at %}{{ run.started_at|date:"Y-m-d H:i:s" }}{% else %}—{% endif %}</p>
+        </div>
+        <div class="bg-base-100 rounded-xl border border-base-300 p-4">
+            <p class="text-xs text-base-content/50">Duration</p>
+            <p class="font-semibold">{% if run.duration_seconds is not None %}{{ run.duration_seconds }}s{% else %}—{% endif %}</p>
+        </div>
+    </div>
+
+    <div class="bg-base-100 rounded-xl border border-base-300 p-4 mb-5">
+        <h3 class="font-semibold mb-2">Parameters</h3>
+        <pre class="text-xs whitespace-pre-wrap">{{ run.params }}</pre>
+    </div>
+
+    {% if run.error %}
+    <div class="alert alert-error mb-5">
+        <span>{{ run.error }}</span>
+    </div>
+    {% endif %}
+
+    <div class="bg-neutral text-neutral-content rounded-xl p-4 overflow-auto">
+        <pre class="text-xs whitespace-pre-wrap">{{ run.output|default:"No output yet." }}</pre>
+    </div>
+</div>

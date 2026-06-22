@@ -1,0 +1,503 @@
+<style>
+    .lock-monitor-shell .lm-feed-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 0.8rem;
+    }
+    .lock-monitor-shell .lm-feed-meta {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        color: var(--lm-muted);
+        font-size: 0.7rem;
+    }
+    .lock-monitor-shell .lm-count {
+        border: 1px solid var(--lm-border);
+        border-radius: 999px;
+        padding: 0.2rem 0.5rem;
+        background: #f1f5f9;
+        color: #475569;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .lock-monitor-shell .lm-snapshot {
+        margin-bottom: 0.9rem;
+        border: 1px solid var(--lm-border);
+        border-left-width: 4px;
+        border-radius: 0.6rem;
+        overflow: hidden;
+        background: var(--lm-panel);
+    }
+    .lock-monitor-shell .lm-snapshot-ok { border-left-color: var(--lm-ok); }
+    .lock-monitor-shell .lm-snapshot-watch { border-left-color: var(--lm-watch); }
+    .lock-monitor-shell .lm-snapshot-warn { border-left-color: var(--lm-warn); }
+    .lock-monitor-shell .lm-snapshot-alert { border-left-color: var(--lm-alert); }
+    .lock-monitor-shell .lm-snapshot-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.9rem 1rem;
+        border-bottom: 1px solid var(--lm-border);
+        background: #f8fafc;
+    }
+    .lock-monitor-shell .lm-snapshot-time {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.78rem;
+        font-weight: 650;
+    }
+    .lock-monitor-shell .lm-snapshot-target {
+        margin-top: 0.2rem;
+        color: var(--lm-muted);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.68rem;
+    }
+    .lock-monitor-shell .lm-snapshot-summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+        padding: 0.65rem 1rem;
+        border-bottom: 1px solid var(--lm-border);
+    }
+    .lock-monitor-shell .lm-stat {
+        border: 1px solid var(--lm-border);
+        border-radius: 0.35rem;
+        padding: 0.28rem 0.5rem;
+        background: #f8fafc;
+        color: var(--lm-muted);
+        font-size: 0.68rem;
+    }
+    .lock-monitor-shell .lm-stat strong { margin-left: 0.2rem; color: var(--lm-text); }
+    .lock-monitor-shell .lm-message {
+        margin: 0.75rem 1rem 0;
+        border: 1px solid #edc7a9;
+        border-radius: 0.4rem;
+        padding: 0.55rem 0.65rem;
+        background: #fff7ed;
+        color: #9a4916;
+        font-size: 0.72rem;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+    .lock-monitor-shell .lm-message-error { border-color: #efb4ba; background: #fff1f2; color: #a92331; }
+    .lock-monitor-shell .lm-snapshot-section { padding: 0.85rem 1rem 0.25rem; }
+    .lock-monitor-shell .lm-snapshot-section:last-child { padding-bottom: 1rem; }
+    .lock-monitor-shell .lm-section-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 0.45rem;
+    }
+    .lock-monitor-shell .lm-section-count {
+        color: var(--lm-muted);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.66rem;
+    }
+    .lock-monitor-shell .lm-none {
+        margin: 0.25rem 0 0.55rem;
+        color: #737b87;
+        font-size: 0.75rem;
+        font-style: italic;
+    }
+    .lock-monitor-shell .lm-table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--lm-border);
+        border-radius: 0.4rem;
+    }
+    .lock-monitor-shell .lm-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.68rem;
+    }
+    .lock-monitor-shell .lm-table th,
+    .lock-monitor-shell .lm-table td {
+        padding: 0.48rem 0.55rem;
+        border-bottom: 1px solid var(--lm-border);
+        text-align: left;
+        vertical-align: top;
+    }
+    .lock-monitor-shell .lm-table tr:last-child td { border-bottom: 0; }
+    .lock-monitor-shell .lm-table th {
+        background: #f8fafc;
+        color: var(--lm-muted);
+        font-size: 0.62rem;
+        font-weight: 650;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+    .lock-monitor-shell .lm-table tbody tr:hover { background: rgba(86, 126, 185, 0.07); }
+    .lock-monitor-shell .lm-query {
+        min-width: 25rem;
+        max-width: 48rem;
+        margin: 0;
+        color: #1d4e89;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+    .lock-monitor-shell .lm-blocking { color: #a8430d; }
+    .lock-monitor-shell .lm-analysis {
+        margin-top: 0.5rem;
+        border: 1px solid #c9d8ec;
+        border-radius: 0.35rem;
+        padding: 0.55rem 0.65rem;
+        background: #f6f9fd;
+        color: #344054;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 0.7rem;
+        line-height: 1.45;
+    }
+    .lock-monitor-shell .lm-analysis-title {
+        margin-bottom: 0.3rem;
+        color: #526b8a;
+        font-size: 0.6rem;
+        font-weight: 750;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+    .lock-monitor-shell .lm-analysis pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+    .lock-monitor-shell .lm-analysis-error { border-color: #edc7a9; background: #fff8f2; color: #9a4916; }
+    .lock-monitor-shell .lm-signal {
+        display: inline-block;
+        margin: 0.12rem 0.12rem 0.12rem 0;
+        border: 1px solid #e4cf82;
+        border-radius: 999px;
+        padding: 0.12rem 0.35rem;
+        background: #fff9df;
+        color: #7a5a08;
+        font-size: 0.6rem;
+        white-space: nowrap;
+    }
+    .lock-monitor-shell .lm-health-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(8rem, 1fr));
+        gap: 0.45rem;
+        margin-bottom: 0.75rem;
+    }
+    .lock-monitor-shell .lm-health-card {
+        border: 1px solid var(--lm-border);
+        border-radius: 0.4rem;
+        padding: 0.6rem;
+        background: #f8fafc;
+    }
+    .lock-monitor-shell .lm-health-label {
+        color: var(--lm-muted);
+        font-size: 0.61rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+    .lock-monitor-shell .lm-health-value {
+        margin-top: 0.2rem;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 1rem;
+        font-weight: 650;
+    }
+    .lock-monitor-shell .lm-empty {
+        border: 1px dashed var(--lm-border);
+        border-radius: 0.6rem;
+        padding: 3rem 1rem;
+        color: var(--lm-muted);
+        text-align: center;
+    }
+    .lock-monitor-shell .lm-pagination {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-top: 1rem;
+        border-top: 1px solid var(--lm-border);
+        padding-top: 1rem;
+    }
+    .lock-monitor-shell .lm-page-summary { color: var(--lm-muted); font-size: 0.72rem; }
+    .lock-monitor-shell .lm-page-actions { display: flex; gap: 0.45rem; }
+    .lock-monitor-shell .lm-page-link {
+        display: inline-flex;
+        align-items: center;
+        min-height: 2rem;
+        border: 1px solid var(--lm-border);
+        border-radius: 0.4rem;
+        padding: 0 0.7rem;
+        background: #ffffff;
+        color: #344054;
+        font-size: 0.7rem;
+        font-weight: 650;
+        text-decoration: none;
+    }
+    .lock-monitor-shell .lm-page-link:hover { border-color: #8aabcf; background: #f5f8fc; }
+    @media (max-width: 760px) {
+        .lock-monitor-shell .lm-snapshot-header { align-items: flex-start; flex-direction: column; }
+        .lock-monitor-shell .lm-health-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+</style>
+
+<div class="lm-paged-feed"
+     hx-get="{% url 'lock_monitor_results' %}?page={{ capture_page.number }}{% if filter_query %}&amp;{{ filter_query }}{% endif %}"
+     hx-trigger="every 10s"
+     hx-target="#lock-monitor-results"
+     hx-swap="innerHTML"
+     hx-indicator="#lock-monitor-refresh-spinner">
+
+<div class="lm-feed-header">
+    <div>
+        <p class="lm-section-title">Snapshot history</p>
+        <p class="text-xs mt-1 lm-muted">Newest captures appear first</p>
+    </div>
+    <div class="lm-feed-meta">
+        <span id="lock-monitor-refresh-spinner" class="loading loading-spinner loading-xs htmx-indicator"></span>
+        <span>{{ record_count }} records</span>
+        <span class="lm-count">{{ snapshots|length }} captures</span>
+    </div>
+</div>
+
+{% if snapshots %}
+    {% for snapshot in snapshots %}
+    <article class="lm-snapshot lm-snapshot-{{ snapshot.status }}"
+             data-snapshot-status="{{ snapshot.status }}"
+             data-capture-id="{{ snapshot.capture.pk }}">
+        <header class="lm-snapshot-header">
+            <div>
+                <p class="lm-snapshot-time">{{ snapshot.capture.started_at|date:"Y-m-d H:i:s" }} <span class="lm-muted">(Sydney)</span></p>
+                <p class="lm-snapshot-target">
+                    {{ snapshot.capture.tenant_host }} · Capture #{{ snapshot.capture.pk }}{% if snapshot.capture.command_run_id %} · Run #{{ snapshot.capture.command_run_id }}{% endif %}
+                </p>
+            </div>
+            <span class="lm-status lm-status-{{ snapshot.status }}">{{ snapshot.status_label }}</span>
+        </header>
+
+        <div class="lm-snapshot-summary">
+            <span class="lm-stat">Sources <strong>{{ snapshot.capture.data_source_count }}</strong></span>
+            <span class="lm-stat">Processes <strong>{{ snapshot.capture.process_count }}</strong></span>
+            <span class="lm-stat">Lock waits <strong>{{ snapshot.capture.lock_count }}</strong></span>
+            <span class="lm-stat">Shown <strong>{{ snapshot.shown_record_count }}</strong></span>
+            {% if snapshot.capture.completed_at %}<span class="lm-stat">Completed <strong>{{ snapshot.capture.completed_at|date:"H:i:s" }}</strong></span>{% endif %}
+        </div>
+
+        {% if snapshot.capture.error %}
+        <div class="lm-message lm-message-error">{{ snapshot.capture.error }}</div>
+        {% elif snapshot.capture.warning %}
+        <div class="lm-message">{{ snapshot.capture.warning }}</div>
+        {% endif %}
+
+        <section class="lm-snapshot-section">
+            <div class="lm-section-heading">
+                <h3 class="lm-section-title">Lock waits</h3>
+                <span class="lm-section-count">{{ snapshot.lock_records|length }}</span>
+            </div>
+            {% if snapshot.lock_records %}
+            <div class="lm-table-wrap">
+                <table class="lm-table">
+                    <thead>
+                        <tr>
+                            <th>Waiting</th>
+                            <th>Blocking</th>
+                            <th>Seconds</th>
+                            <th>State</th>
+                            <th>Queries</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in snapshot.lock_records %}
+                        <tr>
+                            <td>{{ record.waiting_process_id|default:"—" }}</td>
+                            <td>{{ record.blocking_process_id|default:"—" }}</td>
+                            <td>{{ record.duration_seconds|default:"—" }}</td>
+                            <td>{{ record.state|default:"—" }}</td>
+                            <td>
+                                <pre class="lm-query">{{ record.query_text|default:"—" }}</pre>
+                                {% if record.blocking_query_text %}
+                                <div class="lm-analysis lm-analysis-error">
+                                    <p class="lm-analysis-title">Blocking query</p>
+                                    <pre class="lm-blocking">{{ record.blocking_query_text }}</pre>
+                                </div>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="lm-none">None</p>
+            {% endif %}
+        </section>
+
+        <section class="lm-snapshot-section">
+            <div class="lm-section-heading">
+                <h3 class="lm-section-title">Active queries — {{ snapshot.tenant_schema }}</h3>
+                <span class="lm-section-count">{{ snapshot.tenant_records|length }}</span>
+            </div>
+            {% if snapshot.tenant_records %}
+            <div class="lm-table-wrap">
+                <table class="lm-table">
+                    <thead>
+                        <tr>
+                            <th>Thread</th>
+                            <th>User</th>
+                            <th>Command</th>
+                            <th>Seconds</th>
+                            <th>State</th>
+                            <th>Query and analysis</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in snapshot.tenant_records %}
+                        <tr>
+                            <td>{{ record.process_id|default:"—" }}</td>
+                            <td>{{ record.user|default:"—" }}</td>
+                            <td>{{ record.command|default:"—" }}</td>
+                            <td>{{ record.duration_seconds|default:"0" }}</td>
+                            <td>{{ record.state|default:"—" }}</td>
+                            <td>
+                                <pre class="lm-query">{{ record.query_text|default:"—" }}</pre>
+                                {% if record.contention_signals %}
+                                <div class="mt-2">
+                                    {% for signal in record.contention_signals %}<span class="lm-signal">{{ signal }}</span>{% endfor %}
+                                </div>
+                                {% endif %}
+                                {% if record.explanation %}
+                                <div class="lm-analysis">
+                                    <p class="lm-analysis-title">Query analysis · thread {{ record.process_id }}</p>
+                                    <pre>{{ record.explanation }}</pre>
+                                    {% if record.explain_json %}
+                                    <details class="mt-2">
+                                        <summary class="cursor-pointer lm-muted">Raw EXPLAIN plan</summary>
+                                        <pre class="mt-2">{{ record.explain_json }}</pre>
+                                    </details>
+                                    {% endif %}
+                                </div>
+                                {% elif record.explain_error %}
+                                <div class="lm-analysis lm-analysis-error">
+                                    <p class="lm-analysis-title">EXPLAIN unavailable</p>
+                                    <p>{{ record.explain_error }}</p>
+                                </div>
+                                {% elif record.explain_skipped_reason %}
+                                <div class="lm-analysis">
+                                    <p>{{ record.explain_skipped_reason }}</p>
+                                </div>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="lm-none">None</p>
+            {% endif %}
+        </section>
+
+        <section class="lm-snapshot-section">
+            <div class="lm-section-heading">
+                <h3 class="lm-section-title">Active queries — other schemas</h3>
+                <span class="lm-section-count">{{ snapshot.other_records|length }}</span>
+            </div>
+            {% if snapshot.other_records %}
+            <div class="lm-table-wrap">
+                <table class="lm-table">
+                    <thead>
+                        <tr>
+                            <th>Thread</th>
+                            <th>Database</th>
+                            <th>User</th>
+                            <th>Seconds</th>
+                            <th>State</th>
+                            <th>Query</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in snapshot.other_records %}
+                        <tr>
+                            <td>{{ record.process_id|default:"—" }}</td>
+                            <td>{{ record.database_name|default:"—" }}</td>
+                            <td>{{ record.user|default:"—" }}</td>
+                            <td>{{ record.duration_seconds|default:"0" }}</td>
+                            <td>{{ record.state|default:"—" }}</td>
+                            <td>
+                                <pre class="lm-query">{{ record.query_text|default:"—" }}</pre>
+                                {% if record.contention_signals %}
+                                <div class="mt-2">
+                                    {% for signal in record.contention_signals %}<span class="lm-signal">{{ signal }}</span>{% endfor %}
+                                </div>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="lm-none">None</p>
+            {% endif %}
+        </section>
+
+        {% if snapshot.resource_records %}
+        <section class="lm-snapshot-section">
+            <div class="lm-section-heading">
+                <h3 class="lm-section-title">Server health</h3>
+                <span class="lm-section-count">{{ snapshot.resource_records|length }} source{{ snapshot.resource_records|length|pluralize }}</span>
+            </div>
+            {% for record in snapshot.resource_records %}
+            <div class="lm-health-grid">
+                <div class="lm-health-card">
+                    <p class="lm-health-label">Threads connected</p>
+                    <p class="lm-health-value">{{ record.server_metrics.threads_connected|default:"—" }}</p>
+                </div>
+                <div class="lm-health-card">
+                    <p class="lm-health-label">Threads running</p>
+                    <p class="lm-health-value">{{ record.server_metrics.threads_running|default:"—" }}</p>
+                </div>
+                <div class="lm-health-card">
+                    <p class="lm-health-label">Connection use</p>
+                    <p class="lm-health-value">{{ record.server_metrics.connection_utilization_pct|default:"—" }}{% if record.server_metrics.connection_utilization_pct %}%{% endif %}</p>
+                </div>
+                <div class="lm-health-card">
+                    <p class="lm-health-label">InnoDB lock waits</p>
+                    <p class="lm-health-value">{{ record.server_metrics.innodb_row_lock_current_waits|default:"0" }}</p>
+                </div>
+            </div>
+            {% endfor %}
+        </section>
+        {% endif %}
+    </article>
+    {% endfor %}
+{% else %}
+<div class="lm-empty">
+    <p class="font-semibold">No captures found</p>
+    <p class="mt-1 text-xs">Run a tenant check or broaden the current filters.</p>
+</div>
+{% endif %}
+
+{% if capture_page.paginator.num_pages > 1 %}
+<nav class="lm-pagination" aria-label="Lock monitor capture pages">
+    <p class="lm-page-summary">
+        Page {{ capture_page.number }} of {{ capture_page.paginator.num_pages }} ·
+        {{ capture_page.paginator.count }} captures
+    </p>
+    <div class="lm-page-actions">
+        {% if capture_page.has_previous %}
+        <a class="lm-page-link"
+           href="{% url 'lock_monitor_results' %}?page={{ capture_page.previous_page_number }}{% if filter_query %}&amp;{{ filter_query }}{% endif %}"
+           hx-get="{% url 'lock_monitor_results' %}?page={{ capture_page.previous_page_number }}{% if filter_query %}&amp;{{ filter_query }}{% endif %}"
+           hx-target="#lock-monitor-results"
+           hx-swap="innerHTML"
+           hx-indicator="#lock-monitor-refresh-spinner">Previous</a>
+        {% endif %}
+        {% if capture_page.has_next %}
+        <a class="lm-page-link"
+           href="{% url 'lock_monitor_results' %}?page={{ capture_page.next_page_number }}{% if filter_query %}&amp;{{ filter_query }}{% endif %}"
+           hx-get="{% url 'lock_monitor_results' %}?page={{ capture_page.next_page_number }}{% if filter_query %}&amp;{{ filter_query }}{% endif %}"
+           hx-target="#lock-monitor-results"
+           hx-swap="innerHTML"
+           hx-indicator="#lock-monitor-refresh-spinner">Next</a>
+        {% endif %}
+    </div>
+</nav>
+{% endif %}
+</div>

@@ -1,0 +1,97 @@
+<p class="text-lg font-bold mb-4">{{ modal_title }}</p>
+
+<form hx-post="{{ form_action }}"
+      hx-target="#command-modal-content"
+      hx-swap="innerHTML"
+      id="command-schedule-form"
+      class="space-y-4">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+        <div role="alert" class="alert alert-error text-sm">
+            <span>{{ form.non_field_errors|first }}</span>
+        </div>
+    {% endif %}
+
+    <fieldset class="fieldset" data-command-param="tenant_host">
+        <legend class="fieldset-legend">Tenant Host</legend>
+        {{ form.tenant_host }}
+        {% if form.tenant_host.errors %}<p class="text-error text-xs mt-1">{{ form.tenant_host.errors|first }}</p>{% endif %}
+    </fieldset>
+
+    <fieldset class="fieldset">
+        <legend class="fieldset-legend">Command</legend>
+        {{ form.command_key }}
+        {% if form.command_key.errors %}<p class="text-error text-xs mt-1">{{ form.command_key.errors|first }}</p>{% endif %}
+    </fieldset>
+
+    <fieldset class="fieldset" data-command-param="database_server_url">
+        <legend class="fieldset-legend">Database Server</legend>
+        {{ form.database_server_url }}
+        {% if form.database_server_url.errors %}<p class="text-error text-xs mt-1">{{ form.database_server_url.errors|first }}</p>{% endif %}
+    </fieldset>
+
+    <fieldset class="fieldset" data-command-param="schema_name">
+        <legend class="fieldset-legend">Schema</legend>
+        {{ form.schema_name }}
+        {% if form.schema_name.errors %}<p class="text-error text-xs mt-1">{{ form.schema_name.errors|first }}</p>{% endif %}
+    </fieldset>
+
+    <fieldset class="fieldset">
+        <legend class="fieldset-legend">Advanced Parameters JSON</legend>
+        {{ form.params_text }}
+        {% if form.params_text.errors %}<p class="text-error text-xs mt-1">{{ form.params_text.errors|first }}</p>{% endif %}
+    </fieldset>
+
+    <fieldset class="fieldset">
+        <legend class="fieldset-legend">Schedule Type</legend>
+        {{ form.schedule_type }}
+    </fieldset>
+
+    <div id="command-interval-fields" class="fieldset">
+        <fieldset class="fieldset">
+            <legend class="fieldset-legend">Every (minutes)</legend>
+            {{ form.interval_minutes }}
+            {% if form.interval_minutes.errors %}<p class="text-error text-xs mt-1">{{ form.interval_minutes.errors|first }}</p>{% endif %}
+        </fieldset>
+    </div>
+
+    <div id="command-cron-fields" class="fieldset" style="display:none">
+        <fieldset class="fieldset">
+            <legend class="fieldset-legend">Cron Expression</legend>
+            {{ form.cron_expression }}
+            {% if form.cron_expression.errors %}<p class="text-error text-xs mt-1">{{ form.cron_expression.errors|first }}</p>{% endif %}
+        </fieldset>
+    </div>
+
+    <fieldset class="fieldset">
+        <legend class="fieldset-legend">Active</legend>
+        <label class="flex items-center gap-2 cursor-pointer">
+            {{ form.is_active }}
+            <span class="text-sm">Start schedule immediately</span>
+        </label>
+    </fieldset>
+
+    <div class="modal-action mt-6">
+        <button type="button"
+                onclick="document.getElementById('command-modal').close()"
+                class="btn btn-ghost btn-sm">
+            Cancel
+        </button>
+        <button type="submit" class="btn btn-primary btn-sm" hx-disabled-elt="this">
+            Save Schedule
+        </button>
+    </div>
+</form>
+
+{{ command_defaults|json_script:"command-schedule-defaults" }}
+{% include "partials/_command_parameter_sync.html" with form_id="command-schedule-form" defaults_id="command-schedule-defaults" %}
+
+<script>
+    function toggleCommandScheduleFields(type) {
+        document.getElementById('command-interval-fields').style.display = type === 'interval' ? '' : 'none';
+        document.getElementById('command-cron-fields').style.display = type === 'cron' ? '' : 'none';
+    }
+    const commandScheduleType = document.getElementById('id_command_schedule_type');
+    if (commandScheduleType) toggleCommandScheduleFields(commandScheduleType.value);
+</script>

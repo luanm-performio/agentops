@@ -1,0 +1,49 @@
+{% if runs %}
+<div class="overflow-x-auto rounded-xl border border-base-300 bg-base-100">
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Command</th>
+                <th>Status</th>
+                <th>Queued</th>
+                <th>Duration</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for run in runs %}
+            <tr class="hover">
+                <td class="font-mono text-xs">{{ run.command_key }}</td>
+                <td>
+                    {% if run.status == "completed" %}
+                        <span class="badge badge-success badge-sm">Completed</span>
+                    {% elif run.status == "failed" %}
+                        <span class="badge badge-error badge-sm">Failed</span>
+                    {% elif run.status == "running" %}
+                        <span class="badge badge-info badge-sm">Running</span>
+                    {% else %}
+                        <span class="badge badge-ghost badge-sm">Queued</span>
+                    {% endif %}
+                </td>
+                <td class="text-xs text-base-content/60">{{ run.created_at|date:"M d, H:i" }}</td>
+                <td class="text-xs text-base-content/60">
+                    {% if run.duration_seconds is not None %}{{ run.duration_seconds }}s{% else %}—{% endif %}
+                </td>
+                <td>
+                    <a href="{% url 'command_run_detail' run.pk %}"
+                       hx-get="{% url 'command_run_detail' run.pk %}"
+                       hx-target="#content"
+                       hx-swap="innerHTML"
+                       hx-push-url="true"
+                       class="btn btn-ghost btn-xs">View</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="text-center py-14 text-base-content/40 bg-base-100 rounded-xl border border-base-300">
+    <p class="text-sm">No command runs yet.</p>
+</div>
+{% endif %}

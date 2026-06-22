@@ -1,0 +1,54 @@
+{% if schedules %}
+<div class="overflow-x-auto rounded-xl border border-base-300 bg-base-100">
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Command</th>
+                <th>Schedule</th>
+                <th>Status</th>
+                <th>Last Run</th>
+                <th class="w-36"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for schedule in schedules %}
+            <tr class="hover">
+                <td class="font-mono text-xs">{{ schedule.command_key }}</td>
+                <td class="font-mono text-xs">{{ schedule.schedule_display }}</td>
+                <td>
+                    {% if schedule.is_active %}
+                        <span class="badge badge-success badge-sm">Active</span>
+                    {% else %}
+                        <span class="badge badge-ghost badge-sm">Paused</span>
+                    {% endif %}
+                </td>
+                <td class="text-xs text-base-content/60">
+                    {% if schedule.last_run %}{{ schedule.last_run|date:"M d, H:i" }}{% else %}Never{% endif %}
+                </td>
+                <td>
+                    <div class="flex gap-1">
+                        <button class="btn btn-ghost btn-xs"
+                                hx-post="{% url 'command_schedule_toggle' schedule.pk %}"
+                                hx-target="#command-schedule-list"
+                                hx-swap="innerHTML">
+                            {% if schedule.is_active %}Pause{% else %}Resume{% endif %}
+                        </button>
+                        <button class="btn btn-ghost btn-xs text-error"
+                                hx-post="{% url 'command_schedule_delete' schedule.pk %}"
+                                hx-target="#command-schedule-list"
+                                hx-swap="innerHTML"
+                                hx-confirm="Delete this schedule?">
+                            Delete
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="text-center py-14 text-base-content/40 bg-base-100 rounded-xl border border-base-300">
+    <p class="text-sm">No command schedules yet.</p>
+</div>
+{% endif %}

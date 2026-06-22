@@ -1,5 +1,4 @@
 import html as html_lib
-import logging
 from urllib.parse import urlencode
 
 from django.contrib.auth.decorators import login_required
@@ -11,18 +10,16 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from .agent_service import run_agent
 from .forms import AgentForm, AgentScheduleForm
-from .models import Agent, AgentRun, AgentSchedule, ChatMessage, ChatSession
-from .schedule_service import ScheduleService
-from .squelch_lookup import (
-    SquelchQueryResult,
-    build_squelch_xlsx,
-    get_squelch_regions,
-    run_squelch_query,
+from .models import (
+    Agent,
+    AgentRun,
+    AgentSchedule,
+    ChatMessage,
+    ChatSession,
 )
-from .tenant_lookup import TenantLookupResult, locate_tenants
+from .schedule_service import ScheduleService
 
 _PROMPT_SESSION_KEY = "agent_run_prompt_{pk}"
-logger = logging.getLogger(__name__)
 
 
 # ── Dashboard ──────────────────────────────────────────────────────────────
@@ -33,183 +30,6 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     if request.headers.get("HX-Request"):
         return render(request, "partials/_dashboard.html")
     return render(request, "dashboard.html")
-
-
-# ── Locate tenant ──────────────────────────────────────────────────────────
-
-
-@login_required
-@require_http_methods(["GET", "POST"])
-def locate_tenant(request: HttpRequest) -> HttpResponse:
-    host_name = ""
-    results: list[TenantLookupResult] = []
-    error = ""
-    has_searched = False
-    status = 200
-
-    if request.method == "POST":
-        host_name = request.POST.get("host_name", "").strip()
-        has_searched = True
-
-        if not host_name:
-            error = "Enter a host name to search."
-            status = 422
-        else:
-            try:
-                results = locate_tenants(host_name)
-            except Exception:
-                logger.exception("Tenant lookup failed for host_name=%s", host_name)
-                error = "Tenant lookup failed. Check the server logs for details."
-                status = 500
-
-    context = {
-        "host_name": host_name,
-        "results": results,
-        "error": error,
-        "has_searched": has_searched,
-    }
-    if request.headers.get("HX-Request"):
-        return render(request, "partials/_locate_tenant.html", context, status=status)
-    return render(request, "locate_tenant.html", context, status=status)
-
-
-# ── Squelch ────────────────────────────────────────────────────────────────
-
-
-@login_required
-@require_http_methods(["GET", "POST"])
-def squelch(request: HttpRequest) -> HttpResponse:
-    available_regions = get_squelch_regions()
-    host_name = ""
-    query = ""
-    selected_regions = available_regions
-    result: SquelchQueryResult | None = None
-    error = ""
-    has_searched = False
-    status = 200
-
-    if request.method == "POST":
-        host_name = request.POST.get("host_name", "").strip()
-        query = request.POST.get("query", "").strip()
-        selected_regions = [
-            region
-            for region in request.POST.getlist("regions")
-            if region in available_regions
-        ]
-        has_searched = True
-
-        if not query:
-            error = "Enter a query to search."
-            status = 422
-        elif not selected_regions:
-            error = "Choose at least one region."
-            status = 422
-        else:
-            try:
-                result = run_squelch_query(host_name, query, selected_regions)
-            except ModuleNotFoundError:
-                logger.exception("Squelch tool is not available")
-                error = "Squelch is not wired yet. Add tools/squelch.py with run_squelch(query, regions)."
-                status = 500
-            except Exception as exc:
-                logger.exception(
-                    "Squelch query failed for regions=%s", selected_regions
-                )
-                error = f"Squelch query failed: {exc}"
-                status = 500
-
-    context = {
-        "available_regions": available_regions,
-        "selected_regions": selected_regions,
-        "host_name": host_name,
-        "query": query,
-        "result": result,
-        "error": error,
-        "has_searched": has_searched,
-    }
-    if request.headers.get("HX-Request"):
-        return render(request, "partials/_squelch.html", context)
-    return render(request, "squelch.html", context, status=status)
-
-
-@login_required
-@require_POST
-def squelch_export(request: HttpRequest) -> HttpResponse:
-    available_regions = get_squelch_regions()
-    host_name = request.POST.get("host_name", "").strip()
-    query = request.POST.get("query", "").strip()
-    selected_regions = [
-        region
-        for region in request.POST.getlist("regions")
-        if region in available_regions
-    ]
-
-    if not query:
-        return _squelch_export_error(
-            request,
-            available_regions,
-            selected_regions,
-            host_name,
-            query,
-            "Enter a query to search.",
-            422,
-        )
-    if not selected_regions:
-        return _squelch_export_error(
-            request,
-            available_regions,
-            selected_regions,
-            host_name,
-            query,
-            "Choose at least one region.",
-            422,
-        )
-
-    try:
-        result = run_squelch_query(host_name, query, selected_regions)
-    except Exception as exc:
-        logger.exception("Squelch export failed for regions=%s", selected_regions)
-        return _squelch_export_error(
-            request,
-            available_regions,
-            selected_regions,
-            host_name,
-            query,
-            f"Squelch export failed: {exc}",
-            500,
-        )
-
-    response = HttpResponse(
-        build_squelch_xlsx(result),
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
-    response["Content-Disposition"] = 'attachment; filename="squelch-results.xlsx"'
-    return response
-
-
-def _squelch_export_error(
-    request: HttpRequest,
-    available_regions: list[str],
-    selected_regions: list[str],
-    host_name: str,
-    query: str,
-    error: str,
-    status: int,
-) -> HttpResponse:
-    return render(
-        request,
-        "squelch.html",
-        {
-            "available_regions": available_regions,
-            "selected_regions": selected_regions,
-            "host_name": host_name,
-            "query": query,
-            "result": None,
-            "error": error,
-            "has_searched": True,
-        },
-        status=status,
-    )
 
 
 # ── Agents ─────────────────────────────────────────────────────────────────

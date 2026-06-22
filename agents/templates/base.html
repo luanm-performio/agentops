@@ -56,7 +56,10 @@
                     {% url 'dashboard' as url_dashboard %}
                     {% url 'agents' as url_agents %}
                     {% url 'locate_tenant' as url_locate_tenant %}
+                    {% url 'lock_monitor' as url_lock_monitor %}
+                    {% url 'calc_log_dashboards' as url_calc_log_dashboards %}
                     {% url 'squelch' as url_squelch %}
+                    {% url 'commands' as url_commands %}
                     {% url 'schedules' as url_schedules %}
                     {% url 'runs' as url_runs %}
                     {% url 'chat_list' as url_chats %}
@@ -95,6 +98,39 @@
                             </a>
                         </li>
                         <li>
+                            <a href="{{ url_lock_monitor }}"
+                               hx-get="{{ url_lock_monitor }}"
+                               hx-target="#content"
+                               hx-swap="innerHTML"
+                               hx-push-url="true"
+                               hx-indicator="#page-loader"
+                               data-navpath="{{ url_lock_monitor }}"
+                               class="flex items-center gap-3 px-3 py-2 rounded-lg transition-colors
+                                      {% if request.path|slice:':14' == '/lock-monitor/' %}bg-white/15 text-neutral-content{% else %}text-neutral-content/70 hover:bg-white/10 hover:text-neutral-content{% endif %}">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6M8 3h8a2 2 0 012 2v14a2 2 0 01-2 2H8a2 2 0 01-2-2V5a2 2 0 012-2zM5 7H3m2 5H3m2 5H3m16-10h2m-2 5h2m-2 5h2" />
+                                </svg>
+                                Lock Monitor
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ url_calc_log_dashboards }}"
+                               hx-get="{{ url_calc_log_dashboards }}"
+                               hx-target="#content"
+                               hx-swap="innerHTML"
+                               hx-push-url="true"
+                               hx-indicator="#page-loader"
+                               data-navpath="{{ url_calc_log_dashboards }}"
+                               data-nav-prefix="true"
+                               class="flex items-center gap-3 px-3 py-2 rounded-lg transition-colors
+                                      {% if request.path|slice:':10' == '/calc-log/' %}bg-white/15 text-neutral-content{% else %}text-neutral-content/70 hover:bg-white/10 hover:text-neutral-content{% endif %}">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 4h16v16H4zM8 9h8M8 13h5M8 17h3" />
+                                </svg>
+                                Parse Calc Log
+                            </a>
+                        </li>
+                        <li>
                             <a href="{{ url_squelch }}"
                                hx-get="{{ url_squelch }}"
                                hx-target="#content"
@@ -124,6 +160,22 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                                 </svg>
                                 Agents
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ url_commands }}"
+                               hx-get="{{ url_commands }}"
+                               hx-target="#content"
+                               hx-swap="innerHTML"
+                               hx-push-url="true"
+                               hx-indicator="#page-loader"
+                               data-navpath="{{ url_commands }}"
+                               class="flex items-center gap-3 px-3 py-2 rounded-lg transition-colors
+                                      {% if request.path|slice:':10' == '/commands/' %}bg-white/15 text-neutral-content{% else %}text-neutral-content/70 hover:bg-white/10 hover:text-neutral-content{% endif %}">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M8 9l3 3-3 3m5 0h3M5 5h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z" />
+                                </svg>
+                                Commands
                             </a>
                         </li>
                         <li>
@@ -205,11 +257,21 @@
         </div>
 
         <script>
+            // Keep validation and processing errors visible when a form uses HTMX.
+            document.body.addEventListener('htmx:beforeSwap', function (e) {
+                if (e.detail.xhr.status === 422 || e.detail.xhr.status === 500) {
+                    e.detail.shouldSwap = true;
+                    e.detail.isError = false;
+                }
+            });
+
             // Update the active nav link after each HTMX navigation
             function syncActiveNav() {
                 const path = window.location.pathname;
                 document.querySelectorAll('[data-navpath]').forEach(el => {
-                    const active = el.dataset.navpath === path;
+                    const active = el.dataset.navPrefix === 'true'
+                        ? path.startsWith(el.dataset.navpath)
+                        : el.dataset.navpath === path;
                     el.classList.toggle('bg-white/15', active);
                     el.classList.toggle('text-neutral-content', active);
                     el.classList.toggle('text-neutral-content/70', !active);

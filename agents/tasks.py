@@ -44,3 +44,15 @@ def run_scheduled_agent(schedule_pk: int) -> str:
     schedule.last_run = timezone.now()
     schedule.save(update_fields=["last_run"])
     return run.status
+
+
+def run_command_run(run_pk: int) -> str:
+    from ops.tasks import run_command_run as run_ops_command_run
+
+    return run_ops_command_run(run_pk)
+
+
+def run_scheduled_command(schedule_pk: int) -> str:
+    from ops.tasks import run_scheduled_command as run_ops_scheduled_command
+
+    return run_ops_scheduled_command(schedule_pk)

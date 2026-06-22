@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calculation Log Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface2: #273348;
+  --border: #334155;
+  --text: #f1f5f9;
+  --muted: #94a3b8;
+  --danger: #ef4444;
+  --success: #22c55e;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+}
+
+/* ── Layout ── */
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+header h1  { font-size: 1.1rem; font-weight: 700; }
+.subtitle  { color: var(--muted); font-size: 0.8rem; }
+.legend    { margin-left: auto; display: flex; gap: 14px; flex-wrap: wrap; }
+.legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.78rem; }
+.dot       { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+nav {
+  display: flex;
+  gap: 2px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+}
+.tab {
+  padding: 10px 16px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-size: 0.83rem;
+  font-weight: 500;
+  transition: all .15s;
+}
+.tab.active { color: var(--text); border-bottom-color: #3b82f6; }
+.tab:hover  { color: var(--text); }
+
+.page      { display: none; padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+.page.active { display: block; }
+.page-wide { max-width: none; padding-left: 16px; padding-right: 16px; }
+
+/* ── KPI cards ── */
+.kpi-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.kpi     { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+.kpi-label { color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 5px; }
+.kpi-value { font-size: 1.45rem; font-weight: 700; line-height: 1; }
+.kpi-sub   { color: var(--muted); font-size: 0.72rem; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── Cards & grid ── */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 18px; }
+@media (max-width: 860px) { .grid-2 { grid-template-columns: 1fr; } }
+.card    { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+.card h3 { font-size: 0.78rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; }
+canvas   { max-height: 280px; }
+
+/* ── Tables ── */
+.table-wrap { overflow-x: auto; margin-top: 6px; }
+table { width: 100%; border-collapse: collapse; font-size: 0.79rem; }
+th {
+  text-align: left;
+  padding: 6px 8px;
+  color: var(--muted);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  white-space: nowrap;
+}
+td { padding: 5px 8px; border-bottom: 1px solid #1a2535; white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+tr:hover td { background: var(--surface2); }
+
+/* ── Badges ── */
+.badge       { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+.badge-red   { background: rgba(239,68,68,.15); color: #f87171; }
+.badge-green { background: rgba(34,197,94,.15);  color: #4ade80; }
+.badge-gray  { background: rgba(148,163,184,.1); color: #94a3b8; }
+
+/* ── Controls ── */
+input[type=text] {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  width: 240px;
+  outline: none;
+}
+input[type=text]:focus { border-color: #3b82f6; }
+select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 5px 9px;
+  font-size: 0.79rem;
+  outline: none;
+  cursor: pointer;
+}
+.toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.toolbar label { color: var(--muted); font-size: 0.78rem; }
+
+/* ── Copy button ── */
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity .15s, color .15s;
+  padding: 1px 3px;
+  border-radius: 3px;
+  vertical-align: middle;
+  line-height: 1;
+  flex-shrink: 0;
+}
+tr:hover .copy-btn,
+.copy-btn.copied   { opacity: 1; }
+.copy-btn:hover    { color: var(--text); background: var(--surface2); }
+.copy-btn svg      { pointer-events: none; }
+
+/* ── Misc ── */
+.sep        { color: var(--border); margin: 0 4px; }
+.muted      { color: var(--muted); }
+.trace-chip { cursor: pointer; transition: color .15s; }
+.trace-chip:hover { color: var(--text) !important; }
+.trace-chip:hover .copy-icon { opacity: 1; }
+.warn {
+  background: rgba(234,179,8,.1);
+  border: 1px solid rgba(234,179,8,.3);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #fbbf24;
+  font-size: 0.8rem;
+  margin-bottom: 14px;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>⏱ Calculation Log Dashboard</h1>
+    <div class="subtitle" id="subtitleEl"></div>
+  </div>
+  <div class="legend" id="legendEl"></div>
+</header>
+
+<nav>
+  <div class="tab active" onclick="showPage('overview', this)">Overview</div>
+  <div class="tab" onclick="showPage('batches', this)">Batches</div>
+  <div class="tab" onclick="showPage('transforms', this)">Transforms</div>
+  <div class="tab" onclick="showPage('regressions', this)">Regressions</div>
+</nav>
+
+<!-- ═══ OVERVIEW ══════════════════════════════════════════════════════════════ -->
+<div class="page active" id="page-overview">
+  <div class="kpi-row" id="kpiRow"></div>
+  <div class="grid-2">
+    <div class="card"><h3>Total Duration per Run</h3><canvas id="cTotal"></canvas></div>
+    <div class="card"><h3>Top 10 Batches</h3><canvas id="cTopBatch"></canvas></div>
+  </div>
+  <div class="grid-2">
+    <div class="card"><h3>Step Duration Distribution</h3><canvas id="cDist"></canvas></div>
+    <div class="card"><h3>Cumulative Time (batch by batch)</h3><canvas id="cCumul"></canvas></div>
+  </div>
+</div>
+
+<!-- ═══ BATCHES ═══════════════════════════════════════════════════════════════ -->
+<div class="page page-wide" id="page-batches">
+  <div class="card" style="margin-bottom: 16px">
+    <h3>All Batches — All Runs</h3>
+    <canvas id="cBatchAll" style="max-height: 460px"></canvas>
+  </div>
+  <div class="card">
+    <h3>Batch Detail</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr id="batchTHead"></tr></thead>
+        <tbody id="tbBatches"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TRANSFORMS ════════════════════════════════════════════════════════════ -->
+<div class="page page-wide" id="page-transforms">
+  <div id="warnTransforms"></div>
+  <div class="toolbar">
+    <input type="text" id="searchT" placeholder="Search transform or batch…" oninput="renderTransforms()">
+    <select id="filterBatch" onchange="renderTransforms()">
+      <option value="">All batches</option>
+    </select>
+    <select id="sortT" onchange="renderTransforms()">
+      <option value="last_desc">Slowest duration ↓</option>
+      <option value="orig">Original sequence</option>
+      <option value="spread_desc">Biggest spread (slowest − fastest)</option>
+      <option value="fastest_asc">Fastest duration ↑</option>
+      <option value="alpha">Alphabetical</option>
+    </select>
+  </div>
+  <div class="card">
+    <div class="table-wrap">
+      <table>
+        <thead><tr id="transformsTHead"></tr></thead>
+        <tbody id="tbTransforms"></tbody>
+      </table>
+      <div id="tCount" style="color: var(--muted); font-size: 0.73rem; margin-top: 8px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ QUERY MODAL ═══════════════════════════════════════════════════════════ -->
+<div id="queryModal" onclick="if (event.target === this) closeModal()"
+     style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:9999; overflow:auto; padding:40px 16px">
+  <div style="background:var(--surface); max-width:780px; margin:0 auto; border-radius:12px; border:1px solid var(--border); padding:24px; position:relative">
+    <div style="display:flex; align-items:flex-start; gap:12px; margin-bottom:14px">
+      <div style="flex:1">
+        <div id="modalBatch" style="color:var(--muted); font-size:0.72rem; margin-bottom:3px"></div>
+        <div id="modalTitle" style="font-weight:600; font-size:0.9rem"></div>
+      </div>
+      <button onclick="closeModal()" style="background:none; border:none; color:var(--muted); font-size:1.3rem; cursor:pointer; line-height:1; padding:0">✕</button>
+    </div>
+    <div id="modalRecords" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px"></div>
+    <div style="display:flex; justify-content:flex-end; gap:8px; margin-bottom:6px">
+      <button id="modalExportBtn" onclick="exportModalQuery()"
+              style="background:none; border:1px solid var(--border); border-radius:4px;
+                     color:var(--muted); padding:4px 12px; cursor:pointer; font-size:.73rem; transition:color .15s">
+        ↓ Export .log
+      </button>
+      <button id="modalCopyBtn" onclick="copyModalQuery()"
+              style="background:none; border:1px solid var(--border); border-radius:4px;
+                     color:var(--muted); padding:4px 12px; cursor:pointer; font-size:.73rem; transition:color .15s">
+        ⎘ Copy
+      </button>
+    </div>
+    <pre id="modalBody"
+         style="background:var(--surface2); padding:16px; border-radius:8px; overflow:auto;
+                font-size:0.76rem; color:#a5b4fc; line-height:1.65; max-height:55vh;
+                white-space:pre-wrap; word-break:break-word; margin:0"></pre>
+  </div>
+</div>
+
+<!-- ═══ REGRESSIONS ═══════════════════════════════════════════════════════════ -->
+<div class="page" id="page-regressions">
+  <div id="warnRegressions"></div>
+  <div class="toolbar" style="margin-bottom: 14px">
+    <label>Compare:</label>
+    <select id="selRA" onchange="renderRegressions()"></select>
+    <span class="sep">vs</span>
+    <select id="selRB" onchange="renderRegressions()"></select>
+  </div>
+  <div class="kpi-row" id="kpiReg"></div>
+  <div class="grid-2">
+    <div class="card">
+      <h3>Top 20 Regressions (transform level)</h3>
+      <canvas id="cReg" style="max-height: 400px"></canvas>
+    </div>
+    <div class="card">
+      <h3>Scatter: Run A vs Run B per step</h3>
+      <canvas id="cScatter" style="max-height: 400px"></canvas>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Regression Detail</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Rank</th><th>Batch</th><th>Transform</th>
+          <th id="thRA"></th><th id="thRB"></th><th>+ Seconds</th><th>% Slower</th>
+        </tr></thead>
+        <tbody id="tbReg"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+var _copyReg = [];
+const COPY_SVG = `<svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/></svg>`;
+const D = __DATA_PLACEHOLDER__;
+Chart.defaults.color = '#94a3b8';
+Chart.defaults.borderColor = '#334155';
+
+const PALETTE = ['#3b82f6', '#f97316', '#22c55e', '#a855f7', '#ec4899', '#14b8a6', '#eab308', '#ef4444'];
+const N      = D.runs.length;
+const LABELS = D.runs.map(r => r.label.replace(/\.log$/, ''));
+const clr    = i => PALETTE[i % PALETTE.length];
+const mins   = s => (s / 60).toFixed(1) + 'm';
+
+// ── Header ────────────────────────────────────────────────────────────────────
+document.getElementById('subtitleEl').textContent =
+  `${N} run${N > 1 ? 's' : ''} · ${D.runs[0].steps} steps`;
+
+document.getElementById('legendEl').innerHTML = LABELS.map((l, i) => {
+  const tid = D.runs[i].trace_id;
+  const tidHtml = tid
+    ? `<span class="trace-chip" onclick="copyTrace('${tid}', this)" title="Click to copy full trace ID"
+           style="color:var(--muted); font-size:.65rem; font-family:monospace">
+         ${tid.slice(0, 8)}… <span class="copy-icon" style="opacity:.5; font-size:.6rem">⎘</span>
+       </span>`
+    : '';
+  return `<div class="legend-item"><div class="dot" style="background:${clr(i)}"></div>${l} ${tidHtml}</div>`;
+}).join('');
+
+// ── Overview KPIs ─────────────────────────────────────────────────────────────
+const kpiRow = document.getElementById('kpiRow');
+
+D.runs.forEach((r, i) => {
+  const tidHtml = r.trace_id
+    ? `<div class="kpi-sub trace-chip" onclick="copyTrace('${r.trace_id}', this)" title="Click to copy full trace ID">
+         <span style="font-family:monospace">${r.trace_id.slice(0, 16)}…</span>
+         <span class="copy-icon" style="opacity:.5; margin-left:3px; font-size:.65rem">⎘</span>
+       </div>`
+    : '';
+  kpiRow.innerHTML += `
+    <div class="kpi">
+      <div class="kpi-label">${LABELS[i]}</div>
+      <div class="kpi-value" style="color:${clr(i)}">${mins(r.total)}</div>
+      <div class="kpi-sub">${r.total}s · ${r.steps} steps</div>
+      ${tidHtml}
+    </div>`;
+});
+
+if (N > 1 && D.regression_pct != null) {
+  const sign  = D.regression_pct > 0 ? '+' : '';
+  const color = D.regression_pct > 0 ? 'var(--danger)' : 'var(--success)';
+  const delta = (D.runs[D.default_b].total - D.runs[D.default_a].total).toFixed(0);
+  kpiRow.innerHTML += `
+    <div class="kpi">
+      <div class="kpi-label">First → Last</div>
+      <div class="kpi-value" style="color:${color}">${sign}${D.regression_pct}%</div>
+      <div class="kpi-sub">${sign}${delta}s</div>
+    </div>`;
+}
+
+if (D.worst_step_diff != null) {
+  kpiRow.innerHTML += `
+    <div class="kpi">
+      <div class="kpi-label">Worst Step Δ</div>
+      <div class="kpi-value" style="color:var(--danger)">+${D.worst_step_diff}s</div>
+      <div class="kpi-sub" title="${D.worst_step_name}">${D.worst_step_name.slice(0, 30)}</div>
+    </div>`;
+}
+
+// ── Overview charts ───────────────────────────────────────────────────────────
+new Chart(document.getElementById('cTotal'), {
+  type: 'bar',
+  data: {
+    labels: LABELS,
+    datasets: [{ label: 'Total (s)', data: D.runs.map(r => r.total), backgroundColor: LABELS.map((_, i) => clr(i)), borderRadius: 6 }]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: { y: { title: { display: true, text: 'Seconds' } } }
+  }
+});
+
+const top10 = D.batches.slice(0, 10);
+new Chart(document.getElementById('cTopBatch'), {
+  type: 'bar',
+  data: {
+    labels: top10.map(b => b.name.length > 28 ? b.name.slice(0, 28) + '…' : b.name),
+    datasets: D.runs.map((r, i) => ({ label: LABELS[i], data: top10.map(b => b.durations[i]), backgroundColor: clr(i) + 'cc', borderRadius: 3 }))
+  },
+  options: {
+    responsive: true,
+    indexAxis: 'y',
+    plugins: { legend: { position: 'top' } },
+    scales: { x: { title: { display: true, text: 'Seconds' } } }
+  }
+});
+
+const BUCKETS      = [0, .5, 1, 5, 10, 30, 60, 120, 300];
+const BUCKET_LABELS = ['<0.5s', '0.5–1s', '1–5s', '5–10s', '10–30s', '30–60s', '1–2m', '2–5m', '>5m'];
+function bucket(arr) {
+  const counts = new Array(BUCKETS.length).fill(0);
+  arr.forEach(v => {
+    for (let i = BUCKETS.length - 1; i >= 0; i--) {
+      if (v >= BUCKETS[i]) { counts[i]++; break; }
+    }
+  });
+  return counts;
+}
+new Chart(document.getElementById('cDist'), {
+  type: 'bar',
+  data: {
+    labels: BUCKET_LABELS,
+    datasets: D.runs.map((r, i) => ({
+      label: LABELS[i],
+      data: bucket(D.transforms.map(t => t.durations[i]).filter(v => v != null)),
+      backgroundColor: clr(i) + 'bb',
+      borderRadius: 3,
+    }))
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'top' } },
+    scales: { y: { title: { display: true, text: 'Step count' } } }
+  }
+});
+
+new Chart(document.getElementById('cCumul'), {
+  type: 'line',
+  data: {
+    labels: D.batches.map((_, i) => 'Batch ' + (i + 1)),
+    datasets: D.runs.map((r, ri) => {
+      let acc = 0;
+      return {
+        label: LABELS[ri],
+        data: D.batches.map(b => { acc += b.durations[ri]; return +acc.toFixed(1); }),
+        borderColor: clr(ri),
+        backgroundColor: 'transparent',
+        tension: .3,
+        pointRadius: 0,
+      };
+    })
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'top' } },
+    scales: { y: { title: { display: true, text: 'Cumulative seconds' } } }
+  }
+});
+
+// ── Batches page ──────────────────────────────────────────────────────────────
+new Chart(document.getElementById('cBatchAll'), {
+  type: 'bar',
+  data: {
+    labels: D.batches.slice(0, 15).map(b => b.name.length > 38 ? b.name.slice(0, 38) + '…' : b.name),
+    datasets: D.runs.map((r, i) => ({ label: LABELS[i], data: D.batches.slice(0, 15).map(b => b.durations[i]), backgroundColor: clr(i), borderRadius: 3 }))
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    indexAxis: 'y',
+    plugins: { legend: { position: 'top' } },
+    scales: { x: { title: { display: true, text: 'Seconds' } } }
+  }
+});
+
+document.getElementById('batchTHead').innerHTML =
+  '<th>#</th><th>Batch</th>' +
+  LABELS.map((l, i) => `<th style="color:${clr(i)}">${l} (s)</th>`).join('') +
+  (N > 1 ? '<th>First→Last Δ</th><th>Change</th>' : '');
+
+const tbB = document.getElementById('tbBatches');
+[...D.batches].sort((a, b) => b.durations[0] - a.durations[0]).forEach(b => {
+  const d0   = b.durations[0];
+  const dLast = b.durations[N - 1];
+  const diff = N > 1 ? dLast - d0 : null;
+  const pct  = (d0 > 0 && diff != null) ? ((diff / d0) * 100).toFixed(0) : null;
+  tbB.innerHTML += `<tr>
+    <td class="muted">${b.orig_idx + 1}</td>
+    <td><span style="display:inline-flex;align-items:center;gap:4px">${makeCopyBtn(b.name)}${b.name}</span></td>
+    ${b.durations.map((d, ri) => {
+      const st    = b.start_times?.[ri];
+      const tLine = st ? `<div style="color:var(--muted);font-size:.67rem;font-family:monospace;margin-top:2px">${st} → ${addSecs(st, d)}</div>` : '';
+      return `<td style="color:${clr(ri)};vertical-align:top">${d.toFixed(1)}${tLine}</td>`;
+    }).join('')}
+    ${N > 1 ? `
+      <td>${diff != null ? (diff >= 0 ? '+' : '') + diff.toFixed(1) : '–'}</td>
+      <td>${pct != null ? `<span class="badge ${diff > 0 ? 'badge-red' : 'badge-green'}">${diff > 0 ? '+' : ''}${pct}%</span>` : '–'}</td>` : ''}
+  </tr>`;
+});
+
+// ── Regressions selectors ─────────────────────────────────────────────────────
+function buildRunOptions(selectId, defaultIdx) {
+  const sel = document.getElementById(selectId);
+  LABELS.forEach((l, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = l;
+    if (i === defaultIdx) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+buildRunOptions('selRA', D.default_a);
+buildRunOptions('selRB', D.default_b);
+
+// ── Transforms page ───────────────────────────────────────────────────────────
+const batchSet = [...new Set(D.transforms.map(t => t.batch))].sort();
+batchSet.forEach(b => { document.getElementById('filterBatch').innerHTML += `<option value="${b}">${b}</option>`; });
+
+document.getElementById('transformsTHead').innerHTML =
+  '<th>#</th><th>Batch</th><th>Transform</th>' +
+  LABELS.map((l, i) => `<th style="color:${clr(i)}">${l}<br><span style="font-size:.63rem;font-weight:400;color:var(--muted)">s · rows · sql</span></th>`).join('') +
+  '<th>Best Run</th>';
+
+function renderTransforms() {
+  if (!D.same_length && N > 1) {
+    document.getElementById('warnTransforms').innerHTML =
+      '<div class="warn">⚠ Some transforms are present in only one run (shown as –). Comparison columns reflect matched transforms only.</div>';
+  }
+
+  const query    = document.getElementById('searchT').value.toLowerCase();
+  const batch    = document.getElementById('filterBatch').value;
+  const sortMode = document.getElementById('sortT').value;
+
+  let data = D.transforms.map((t, origIdx) => {
+    const valid   = t.durations.filter(d => d != null);
+    const fastest = valid.length ? Math.min(...valid) : null;
+    const slowest = valid.length ? Math.max(...valid) : null;
+    const spread  = fastest != null ? +(slowest - fastest).toFixed(3) : 0;
+    const bestIdx = fastest != null ? t.durations.indexOf(fastest) : -1;
+    return { ...t, fastest, slowest, spread, bestIdx, origIdx };
+  }).filter(t =>
+    (!query || t.transform.toLowerCase().includes(query) || t.batch.toLowerCase().includes(query)) &&
+    (!batch || t.batch === batch)
+  );
+
+  const sorters = {
+    spread_desc: (a, b) => b.spread - a.spread,
+    fastest_asc: (a, b) => (a.fastest || 0) - (b.fastest || 0),
+    last_desc:   (a, b) => (b.durations[N - 1] || 0) - (a.durations[N - 1] || 0),
+    alpha:       (a, b) => a.transform.localeCompare(b.transform),
+    orig:        (a, b) => a.origIdx - b.origIdx,
+  };
+  if (sorters[sortMode]) data.sort(sorters[sortMode]);
+
+  const tb = document.getElementById('tbTransforms');
+  tb.innerHTML = '';
+  data.slice(0, 300).forEach(t => {
+    const cells = t.durations.map((d, ri) => {
+      if (d == null) return `<td class="muted">–</td>`;
+      const isBest = ri === t.bestIdx;
+      const diff   = !isBest && t.fastest != null ? +(d - t.fastest).toFixed(2) : null;
+      const pct    = diff != null && t.fastest > 0 ? +((diff / t.fastest) * 100).toFixed(0) : null;
+      const badge  = isBest
+        ? `<span class="badge badge-green">Best</span>`
+        : pct != null ? `<span class="badge ${pct > 50 ? 'badge-red' : 'badge-gray'}">+${pct}%</span>` : '';
+      const recStr = t.records?.[ri] != null
+        ? `<div style="color:var(--muted);font-size:.68rem;margin-top:2px">${t.records[ri].toLocaleString()} rows</div>` : '';
+      const st     = t.start_times?.[ri];
+      const tLine  = st ? `<div style="color:var(--muted);font-size:.67rem;font-family:monospace;margin-top:2px">${st} → ${addSecs(st, d)}</div>` : '';
+      const sqlBtn = t.queries?.[ri]
+        ? `<div style="margin-top:3px"><button data-qidx="${t.origIdx}" data-ridx="${ri}"
+             style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--muted);padding:1px 6px;cursor:pointer;font-size:.68rem;white-space:nowrap">SQL</button></div>`
+        : '';
+      return `<td style="color:${clr(ri)};vertical-align:top">${d.toFixed(3)} ${badge}${recStr}${tLine}${sqlBtn}</td>`;
+    }).join('');
+
+    const bestLabel = t.bestIdx >= 0 ? LABELS[t.bestIdx] : '–';
+    const bestRec   = t.records?.[t.bestIdx] != null
+      ? `<div style="color:var(--muted);font-size:.68rem;margin-top:2px">${t.records[t.bestIdx].toLocaleString()} rows</div>` : '';
+
+    tb.innerHTML += `<tr>
+      <td class="muted" style="vertical-align:top">${t.origIdx + 1}</td>
+      <td class="muted" style="font-size:.72rem;vertical-align:top"><span style="display:inline-flex;align-items:center;gap:4px">${makeCopyBtn(t.batch)}${t.batch}</span></td>
+      <td style="vertical-align:top"><span style="display:inline-flex;align-items:center;gap:4px">${makeCopyBtn(t.transform)}${t.transform}</span></td>
+      ${cells}
+      <td style="color:${t.bestIdx >= 0 ? clr(t.bestIdx) : 'var(--muted)'};font-size:.78rem;vertical-align:top">${bestLabel}${bestRec}</td>
+    </tr>`;
+  });
+
+  document.getElementById('tCount').textContent =
+    `Showing ${Math.min(data.length, 300)} of ${data.length} transforms`;
+}
+renderTransforms();
+
+// ── Query modal ───────────────────────────────────────────────────────────────
+// Delegated listener avoids embedding SQL (with quotes) in onclick attributes.
+document.getElementById('tbTransforms').addEventListener('click', e => {
+  const btn = e.target.closest('[data-qidx]');
+  if (!btn) return;
+  const t  = D.transforms[parseInt(btn.dataset.qidx)];
+  const ri = parseInt(btn.dataset.ridx ?? 0);
+  if (!t) return;
+
+  const runLabel = LABELS[ri] ?? `Run ${ri + 1}`;
+  document.getElementById('modalBatch').textContent = t.batch;
+  document.getElementById('modalTitle').textContent = `${t.transform}  [${runLabel}]`;
+  document.getElementById('modalBody').textContent  = (t.queries?.[ri]) || '(no query text)';
+  const modal = document.getElementById('queryModal');
+  modal.dataset.transformName = t.transform;
+  modal.dataset.transformIdx  = btn.dataset.qidx;
+  modal.dataset.runIdx        = btn.dataset.ridx ?? 0;
+  document.getElementById('modalRecords').innerHTML = (t.records || []).map((r, i) =>
+    `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:.75rem">
+       <span style="color:${clr(i)}">${LABELS[i]}</span>
+       <span style="color:var(--text);font-weight:600;margin-left:6px">${r != null ? r.toLocaleString() + ' rows' : '–'}</span>
+     </div>`
+  ).join('');
+  modal.style.display = 'block';
+});
+
+function closeModal() { document.getElementById('queryModal').style.display = 'none'; }
+
+function copyModalQuery() {
+  const text = document.getElementById('modalBody').textContent;
+  const btn  = document.getElementById('modalCopyBtn');
+  const reset = () => { btn.textContent = '⎘ Copy'; btn.style.color = ''; };
+  const done  = () => { btn.textContent = '✓ Copied!'; btn.style.color = 'var(--success)'; setTimeout(reset, 1500); };
+  navigator.clipboard.writeText(text).then(done).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+    done();
+  });
+}
+
+function exportModalQuery() {
+  const modal  = document.getElementById('queryModal');
+  const tidx   = parseInt(modal.dataset.transformIdx ?? 0);
+  const ridx   = parseInt(modal.dataset.runIdx ?? 0);
+  const tName  = modal.dataset.transformName || 'query';
+  const logFile = D.transforms[tidx]?.queryLogFiles?.[ridx];
+
+  if (logFile) {
+    // Pre-built .zip — plain anchor download works on file:// for binary files
+    const a = document.createElement('a');
+    a.href = logFile; a.download = logFile.split('/').pop();
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    return;
+  } else {
+    // Fallback: export the displayed (possibly truncated) text as a blob
+    const text = document.getElementById('modalBody').textContent;
+    const name = tName.replace(/[\\/:*?"<>|]/g, '_').trim() || 'query';
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = name + '.log';
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  }
+}
+
+// ── Regressions page ──────────────────────────────────────────────────────────
+let regBarChart = null, regScatterChart = null;
+
+function renderRegressions() {
+  const ai = parseInt(document.getElementById('selRA').value);
+  const bi = parseInt(document.getElementById('selRB').value);
+  const LA = LABELS[ai], LB = LABELS[bi];
+  document.getElementById('thRA').textContent = LA + ' (s)';
+  document.getElementById('thRB').textContent = LB + ' (s)';
+
+  const warnEl = document.getElementById('warnRegressions');
+  if (ai === bi) {
+    warnEl.innerHTML = '<div class="warn">Select two different runs to compare.</div>';
+    document.getElementById('kpiReg').innerHTML = '';
+    document.getElementById('tbReg').innerHTML  = '';
+    return;
+  }
+  warnEl.innerHTML = !D.same_length && N > 1
+    ? '<div class="warn">⚠ Some transforms only appear in one run — those are excluded from regression analysis.</div>'
+    : '';
+
+  const ta     = D.runs[ai].total;
+  const tb     = D.runs[bi].total;
+  const regPct = +((tb - ta) / ta * 100).toFixed(1);
+  const sign   = regPct > 0 ? '+' : '';
+
+  const regs = D.transforms.map(t => {
+    const da = t.durations[ai], db = t.durations[bi];
+    if (da == null || db == null) return null;
+    const diff = +(db - da).toFixed(3);
+    const pct  = da > 0 ? +((diff / da) * 100).toFixed(1) : 0;
+    return { batch: t.batch, transform: t.transform, da, db, diff, pct };
+  }).filter(Boolean).sort((a, b) => b.diff - a.diff);
+
+  const worst      = regs[0];
+  const worstBatch = Object.entries(
+    Object.fromEntries(D.batches.map(b => [b.name, b.durations[bi] - b.durations[ai]]))
+  ).sort((a, b) => b[1] - a[1])[0];
+
+  document.getElementById('kpiReg').innerHTML = `
+    <div class="kpi">
+      <div class="kpi-label">Total Change</div>
+      <div class="kpi-value" style="color:${regPct > 0 ? 'var(--danger)' : 'var(--success)'}">${sign}${regPct}%</div>
+      <div class="kpi-sub">${sign}${(tb - ta).toFixed(0)}s</div>
+    </div>
+    ${worst ? `<div class="kpi">
+      <div class="kpi-label">Worst Single Step</div>
+      <div class="kpi-value" style="color:var(--danger)">+${worst.diff.toFixed(1)}s</div>
+      <div class="kpi-sub" title="${worst.transform}">${worst.transform.slice(0, 34)}</div>
+    </div>` : ''}
+    ${worstBatch ? `<div class="kpi">
+      <div class="kpi-label">Worst Batch</div>
+      <div class="kpi-value" style="color:#f97316">${worstBatch[1] > 0 ? '+' : ''}${worstBatch[1].toFixed(1)}s</div>
+      <div class="kpi-sub" title="${worstBatch[0]}">${worstBatch[0].slice(0, 34)}</div>
+    </div>` : ''}`;
+
+  if (regBarChart)     regBarChart.destroy();
+  if (regScatterChart) regScatterChart.destroy();
+
+  const top20 = regs.slice(0, 20);
+  regBarChart = new Chart(document.getElementById('cReg'), {
+    type: 'bar',
+    data: {
+      labels: top20.map((r, i) => `#${i + 1} ${r.transform.slice(0, 24)}`),
+      datasets: [
+        { label: LA, data: top20.map(r => r.da), backgroundColor: clr(ai) + 'cc', borderRadius: 3 },
+        { label: LB, data: top20.map(r => r.db), backgroundColor: clr(bi) + 'cc', borderRadius: 3 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: { legend: { position: 'top' } },
+      scales: { x: { title: { display: true, text: 'Seconds' } } }
+    }
+  });
+
+  const maxV = Math.max(...D.transforms.map(t => Math.max(t.durations[ai] || 0, t.durations[bi] || 0)));
+  regScatterChart = new Chart(document.getElementById('cScatter'), {
+    type: 'scatter',
+    data: {
+      datasets: [
+        {
+          label: 'Steps',
+          data: D.transforms
+            .filter(t => t.durations[ai] != null && t.durations[bi] != null)
+            .map(t => ({ x: t.durations[ai], y: t.durations[bi] })),
+          backgroundColor: clr(ai) + '99',
+          pointRadius: 4,
+        },
+        {
+          label: 'Equal line',
+          data: [{ x: 0, y: 0 }, { x: maxV, y: maxV }],
+          type: 'line',
+          borderColor: '#64748b',
+          borderDash: [5, 5],
+          pointRadius: 0,
+          borderWidth: 1,
+        },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: { callbacks: { label: ctx => ctx.datasetIndex === 0 ? `${LA}: ${ctx.parsed.x.toFixed(1)}s → ${LB}: ${ctx.parsed.y.toFixed(1)}s` : '' } }
+      },
+      scales: {
+        x: { title: { display: true, text: LA + ' (s)' } },
+        y: { title: { display: true, text: LB + ' (s)' } }
+      }
+    }
+  });
+
+  const tbR = document.getElementById('tbReg');
+  tbR.innerHTML = '';
+  regs.slice(0, 25).forEach((r, i) => {
+    const pct = r.da > 0 ? ((r.diff / r.da) * 100).toFixed(0) : '–';
+    tbR.innerHTML += `<tr>
+      <td class="muted">${i + 1}</td>
+      <td class="muted" style="font-size:.73rem"><span style="display:inline-flex;align-items:center;gap:4px">${makeCopyBtn(r.batch)}${r.batch}</span></td>
+      <td><span style="display:inline-flex;align-items:center;gap:4px">${makeCopyBtn(r.transform)}${r.transform}</span></td>
+      <td style="color:${clr(ai)}">${r.da.toFixed(1)}</td>
+      <td style="color:${clr(bi)}">${r.db.toFixed(1)}</td>
+      <td><span class="badge badge-red">+${r.diff.toFixed(1)}</span></td>
+      <td><span class="badge badge-red">+${pct}%</span></td>
+    </tr>`;
+  });
+}
+renderRegressions();
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+function addSecs(timeStr, secs) {
+  if (!timeStr || secs == null) return null;
+  const [h, m, s] = timeStr.split(':').map(Number);
+  const total = h * 3600 + m * 60 + s + Math.round(secs);
+  const pad   = n => String(n).padStart(2, '0');
+  return `${pad(Math.floor(total / 3600) % 24)}:${pad(Math.floor((total % 3600) / 60))}:${pad(total % 60)}`;
+}
+
+function makeCopyBtn(text) {
+  const idx = _copyReg.push(text) - 1;
+  return `<button class="copy-btn" data-cname="${idx}" title="Copy name">${COPY_SVG}</button>`;
+}
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.copy-btn[data-cname]');
+  if (!btn) return;
+  const text  = _copyReg[parseInt(btn.dataset.cname)];
+  const reset = () => { btn.innerHTML = COPY_SVG; btn.classList.remove('copied'); };
+  const done  = () => { btn.innerHTML = '✓'; btn.classList.add('copied'); setTimeout(reset, 1400); };
+  navigator.clipboard.writeText(text).then(done).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+    done();
+  });
+});
+
+function copyTrace(tid, el) {
+  navigator.clipboard.writeText(tid).then(() => {
+    const prev = el.innerHTML, prevColor = el.style.color;
+    el.innerHTML = '✓ Copied!'; el.style.color = 'var(--success)'; el.style.fontFamily = 'inherit';
+    setTimeout(() => { el.innerHTML = prev; el.style.color = prevColor; el.style.fontFamily = ''; }, 1500);
+  }).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = tid; ta.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+    const prev = el.innerHTML;
+    el.innerHTML = '✓ Copied!'; el.style.color = 'var(--success)';
+    setTimeout(() => { el.innerHTML = prev; el.style.color = ''; }, 1500);
+  });
+}
+
+function showPage(id, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  el.classList.add('active');
+}
+</script>
+</body>
+</html>
+

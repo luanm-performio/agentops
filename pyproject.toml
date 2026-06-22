@@ -14,6 +14,8 @@ dependencies = [
     "html2text>=2025.4.15",
     "markdown>=3.10.2",
     "mcp>=1.27.1",
+    "openpyxl>=3.1.5",
+    "pandas>=3.0.3",
     "pydantic-ai-slim[openai]>=1.107.0",
     "pymysql>=1.2.0",
     "python-dotenv>=1.2.2",
@@ -21,3 +23,6 @@ dependencies = [
     "sqlalchemy>=2.0.49",
     "typing-extensions>=4.15.0",
 ]
+
+[tool.ruff]
+extend-exclude = ["ops/calc_log_scripts"]

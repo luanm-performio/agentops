@@ -1,0 +1,36 @@
+<div class="flex h-full min-h-0 flex-col bg-base-100" data-content-class="p-0 overflow-hidden">
+    <div class="flex flex-none flex-wrap items-center gap-3 border-b border-base-300 px-5 py-3">
+        <a href="{% url 'calc_log_dashboards' %}"
+           hx-get="{% url 'calc_log_dashboards' %}"
+           hx-target="#content"
+           hx-swap="innerHTML"
+           hx-push-url="true"
+           hx-indicator="#page-loader"
+           class="btn btn-sm btn-ghost">← Dashboards</a>
+        <div class="min-w-0 flex-1">
+            <h2 class="truncate text-lg font-semibold">{{ dashboard.name }}</h2>
+            <p class="truncate text-xs text-base-content/50" title="{{ dashboard.source_files|join:', ' }}">
+                {{ dashboard.source_files|length }} log{{ dashboard.source_files|length|pluralize }} · {{ dashboard.source_files|join:", " }}
+            </p>
+        </div>
+        <span class="text-xs text-base-content/50">{{ dashboard.created_at|date:"M j, Y H:i" }}</span>
+        <form method="post"
+              action="{% url 'calc_log_dashboard_delete' dashboard.pk %}"
+              hx-post="{% url 'calc_log_dashboard_delete' dashboard.pk %}"
+              hx-target="#content"
+              hx-swap="innerHTML"
+              hx-confirm="Delete {{ dashboard.name }}?"
+              hx-indicator="#page-loader"
+              hx-disabled-elt="button">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-ghost text-error">Delete</button>
+        </form>
+    </div>
+    <iframe
+        class="min-h-0 flex-1 border-0 bg-slate-950"
+        src="{% url 'calc_log_dashboard_html' dashboard.pk %}"
+        title="{{ dashboard.name }} calculation log dashboard"
+        sandbox="allow-scripts allow-downloads"
+        referrerpolicy="no-referrer"
+    ></iframe>
+</div>

@@ -9,5 +9,8 @@ wheels/
 # Virtual environments
 .venv
 
+# Local development database
+db.sqlite3
+
 # Tool credentials — copy config.yaml.example → config.yaml and fill in real values
 tools/config.yaml

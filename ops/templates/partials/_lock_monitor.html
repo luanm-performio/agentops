@@ -1,0 +1,273 @@
+<div class="lock-monitor-shell" data-testid="lock-monitor-view" data-theme-surface="light">
+    <style>
+        .lock-monitor-shell {
+            --lm-bg: #ffffff;
+            --lm-panel: #ffffff;
+            --lm-panel-soft: #f8fafc;
+            --lm-border: #dfe4ea;
+            --lm-text: #172033;
+            --lm-muted: #667085;
+            --lm-blue: #2563a8;
+            --lm-ok: #2f9e44;
+            --lm-watch: #c28a12;
+            --lm-warn: #dd6b20;
+            --lm-alert: #dc3545;
+            color: var(--lm-text);
+            background:
+                radial-gradient(circle at top right, rgba(37, 99, 168, 0.08), transparent 32rem),
+                var(--lm-bg);
+            border: 1px solid var(--lm-border);
+            border-radius: 1rem;
+            box-shadow: 0 18px 50px rgba(30, 41, 59, 0.09);
+            overflow: hidden;
+        }
+        .lock-monitor-shell .lm-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1.5rem;
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--lm-border);
+            background: rgba(255, 255, 255, 0.9);
+        }
+        .lock-monitor-shell .lm-kicker,
+        .lock-monitor-shell .lm-section-title {
+            color: var(--lm-muted);
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.11em;
+            text-transform: uppercase;
+        }
+        .lock-monitor-shell .lm-title {
+            margin-top: 0.25rem;
+            font-size: clamp(1.35rem, 2.5vw, 2rem);
+            font-weight: 650;
+            letter-spacing: -0.025em;
+        }
+        .lock-monitor-shell .lm-subtitle {
+            margin-top: 0.3rem;
+            color: var(--lm-muted);
+            font-size: 0.84rem;
+        }
+        .lock-monitor-shell .lm-muted { color: var(--lm-muted); }
+        .lock-monitor-shell .lm-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            white-space: nowrap;
+            border: 1px solid currentColor;
+            border-radius: 999px;
+            padding: 0.35rem 0.7rem;
+            font-size: 0.72rem;
+            font-weight: 700;
+        }
+        .lock-monitor-shell .lm-status::before {
+            width: 0.45rem;
+            height: 0.45rem;
+            border-radius: 50%;
+            background: currentColor;
+            content: "";
+            box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent);
+        }
+        .lock-monitor-shell .lm-status-ok { color: #237a35; background: #edf9f0; }
+        .lock-monitor-shell .lm-status-watch { color: #8a6208; background: #fff8df; }
+        .lock-monitor-shell .lm-status-warn { color: #a74712; background: #fff3e8; }
+        .lock-monitor-shell .lm-status-alert { color: #b42332; background: #fff0f1; }
+        .lock-monitor-shell .lm-toolbar {
+            display: grid;
+            grid-template-columns: minmax(18rem, 1fr) auto;
+            gap: 0.8rem;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--lm-border);
+            background: var(--lm-panel-soft);
+        }
+        .lock-monitor-shell .lm-run-form {
+            display: flex;
+            align-items: flex-end;
+            gap: 0.7rem;
+        }
+        .lock-monitor-shell .lm-field { min-width: 0; flex: 1; }
+        .lock-monitor-shell .lm-label {
+            display: block;
+            margin-bottom: 0.35rem;
+            color: var(--lm-muted);
+            font-size: 0.7rem;
+            font-weight: 650;
+        }
+        .lock-monitor-shell input,
+        .lock-monitor-shell select,
+        .lock-monitor-shell .input,
+        .lock-monitor-shell .select {
+            min-height: 2.35rem;
+            border: 1px solid var(--lm-border);
+            border-radius: 0.45rem;
+            outline: none;
+            background: #ffffff;
+            color: var(--lm-text);
+        }
+        .lock-monitor-shell input:focus,
+        .lock-monitor-shell select:focus { border-color: #547fc1; box-shadow: 0 0 0 3px rgba(84, 127, 193, 0.16); }
+        .lock-monitor-shell .lm-button {
+            min-height: 2.35rem;
+            border: 1px solid #4d78b8;
+            border-radius: 0.45rem;
+            padding: 0 0.9rem;
+            background: #315f9f;
+            color: white;
+            font-size: 0.76rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .lock-monitor-shell .lm-button:hover { background: #3c6caf; }
+        .lock-monitor-shell .lm-button-secondary { border-color: var(--lm-border); background: #f8fafc; color: var(--lm-text); }
+        .lock-monitor-shell .lm-queued {
+            margin: 1rem 1.5rem 0;
+            border: 1px solid #b9dfc2;
+            border-radius: 0.55rem;
+            padding: 0.7rem 0.85rem;
+            background: #effaf2;
+            color: #237a35;
+            font-size: 0.78rem;
+        }
+        .lock-monitor-shell .lm-queued a { color: inherit; text-decoration: underline; }
+        .lock-monitor-shell .lm-filters {
+            display: grid;
+            grid-template-columns: 7rem 1.2fr 1fr 10rem 1.5fr auto;
+            gap: 0.65rem;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--lm-border);
+            background: #f8fafc;
+        }
+        .lock-monitor-shell .lm-filter-actions { display: flex; align-items: flex-end; }
+        .lock-monitor-shell .lm-results { padding: 1.25rem 1.5rem 1.5rem; }
+        .lock-monitor-shell .text-error { color: #b42332; }
+        @media (max-width: 1050px) {
+            .lock-monitor-shell .lm-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .lock-monitor-shell .lm-filter-actions { grid-column: span 2; }
+        }
+        @media (max-width: 700px) {
+            .lock-monitor-shell { border-radius: 0.75rem; }
+            .lock-monitor-shell .lm-header,
+            .lock-monitor-shell .lm-toolbar { display: block; padding: 1rem; }
+            .lock-monitor-shell .lm-run-form { margin-top: 0.8rem; }
+            .lock-monitor-shell .lm-filters { grid-template-columns: 1fr; padding: 1rem; }
+            .lock-monitor-shell .lm-filter-actions { grid-column: auto; }
+            .lock-monitor-shell .lm-results { padding: 1rem; }
+        }
+    </style>
+
+    <header class="lm-header">
+        <div>
+            <p class="lm-kicker">Database operations</p>
+            <h2 class="lm-title">Lock Monitor</h2>
+            {% if detail_run %}
+            <p class="lm-subtitle">Command run #{{ detail_run.pk }} · Captured database activity · Australia/Sydney</p>
+            {% else %}
+            <p class="lm-subtitle">Live query, contention, and server-health snapshots · Australia/Sydney</p>
+            {% endif %}
+        </div>
+        {% if detail_run %}
+        <a href="{% url 'commands' %}"
+           hx-get="{% url 'commands' %}"
+           hx-target="#content"
+           hx-swap="innerHTML"
+           hx-push-url="true"
+           class="btn btn-sm btn-ghost">Back to runs</a>
+        {% endif %}
+    </header>
+
+    {% if not detail_run %}
+    <div class="lm-toolbar">
+        <form method="post"
+              action="{% url 'lock_monitor' %}"
+              hx-post="{% url 'lock_monitor' %}"
+              hx-target="#content"
+              hx-swap="innerHTML"
+              hx-indicator="#lock-monitor-spinner"
+              hx-disabled-elt="button[type='submit']"
+              class="lm-run-form">
+            {% csrf_token %}
+            <div class="lm-field">
+                <label class="lm-label" for="{{ form.tenant_host.id_for_label }}">Tenant host</label>
+                {{ form.tenant_host }}
+                {% if form.tenant_host.errors %}
+                <p class="text-error text-xs mt-1">{{ form.tenant_host.errors|first }}</p>
+                {% endif %}
+            </div>
+            <button type="submit" class="lm-button">
+                Run check
+                <span id="lock-monitor-spinner" class="loading loading-spinner loading-xs htmx-indicator"></span>
+            </button>
+        </form>
+        <div class="self-end text-right text-xs lm-muted">
+            Captures refresh automatically<br>every 10 seconds
+        </div>
+    </div>
+
+    {% if queued_run %}
+    <div role="status" class="lm-queued">
+        Queued lock monitor run #{{ queued_run.pk }}.
+        <a href="{% url 'command_run_detail' queued_run.pk %}"
+           hx-get="{% url 'command_run_detail' queued_run.pk %}"
+           hx-target="#content"
+           hx-swap="innerHTML"
+           hx-push-url="true">View run</a>
+    </div>
+    {% endif %}
+
+    <form id="lock-monitor-filter-form"
+          hx-get="{% url 'lock_monitor_results' %}"
+          hx-target="#lock-monitor-results"
+          hx-swap="innerHTML"
+          hx-trigger="input changed delay:300ms, change"
+          hx-indicator="#lock-monitor-refresh-spinner"
+          class="lm-filters">
+        <label>
+            <span class="lm-label">Run ID</span>
+            <input name="run_id" type="number" min="1" value="{{ run_id_filter }}" class="input input-sm w-full font-mono" autocomplete="off">
+        </label>
+        <label>
+            <span class="lm-label">Tenant host</span>
+            <input name="tenant_host" value="{{ tenant_host_filter }}" class="input input-sm w-full" autocomplete="off">
+        </label>
+        <label>
+            <span class="lm-label">Schema</span>
+            <input name="schema" value="{{ schema_filter }}" class="input input-sm w-full font-mono" autocomplete="off">
+        </label>
+        <label>
+            <span class="lm-label">Record type</span>
+            <select name="record_type" class="select select-sm w-full">
+                <option value="">All</option>
+                {% for value, label in record_types %}
+                <option value="{{ value }}" {% if record_type_filter == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            <span class="lm-label">Query, user, or state</span>
+            <input name="search" value="{{ search_filter }}" class="input input-sm w-full" autocomplete="off">
+        </label>
+        <div class="lm-filter-actions">
+            <button type="button" class="lm-button lm-button-secondary w-full" onclick="window.exportLockMonitorResults()">
+                Export Excel
+            </button>
+        </div>
+    </form>
+    {% endif %}
+
+    <div id="lock-monitor-results"
+         class="lm-results"
+         aria-live="polite">
+        {% include "partials/_lock_monitor_results.html" %}
+    </div>
+</div>
+
+{% if not detail_run %}
+<script>
+    window.exportLockMonitorResults = function () {
+        const form = document.getElementById("lock-monitor-filter-form");
+        const query = new URLSearchParams(new FormData(form));
+        window.location.assign("{% url 'lock_monitor_export' %}?" + query.toString());
+    };
+</script>
+{% endif %}
