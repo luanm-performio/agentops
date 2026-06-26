@@ -46,6 +46,44 @@ def run_scheduled_agent(schedule_pk: int) -> str:
     return run.status
 
 
+def run_agent_prompt(agent_pk: int, prompt: str) -> str:
+    from .agent_service import run_agent
+    from .models import Agent, AgentRun
+
+    try:
+        agent = Agent.objects.get(pk=agent_pk)
+    except Agent.DoesNotExist:
+        logger.error("Agent %s not found", agent_pk)
+        return "agent not found"
+
+    if not prompt.strip():
+        logger.error("Agent %s prompt is empty", agent_pk)
+        return "prompt is empty"
+
+    logger.info("Running ad-hoc agent %r (agent %s)", agent.name, agent_pk)
+    run = AgentRun.objects.create(
+        agent=agent,
+        prompt=prompt,
+        status=AgentRun.RUNNING,
+    )
+
+    output_parts: list[str] = []
+    try:
+        for chunk in run_agent(agent, prompt):
+            output_parts.append(chunk)
+        run.status = AgentRun.COMPLETED
+        logger.info("Ad-hoc agent run completed (agent %s, run %s)", agent_pk, run.pk)
+    except Exception as exc:
+        logger.exception("Ad-hoc agent run failed (agent %s, run %s)", agent_pk, run.pk)
+        output_parts.append(f"Error: {exc}")
+        run.status = AgentRun.FAILED
+
+    run.output = "".join(output_parts)
+    run.completed_at = timezone.now()
+    run.save(update_fields=["status", "output", "completed_at"])
+    return f"{run.status} run {run.pk}"
+
+
 def run_command_run(run_pk: int) -> str:
     from ops.tasks import run_command_run as run_ops_command_run
 

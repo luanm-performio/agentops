@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -8,7 +9,11 @@ from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
+from django_q.models import Schedule as QSchedule
 from sqlalchemy.exc import SQLAlchemyError
+
+from agents.models import Agent, AgentRun
 
 from tools.db_config import DevBox, Region
 from tools.tenant import DataSource, Tunnel, find_tenant_data_sources
@@ -548,6 +553,21 @@ class CommandsViewTests(TestCase):
         self.assertContains(response, "Backup, Download, Import")
         self.assertContains(response, "backup_download_import")
 
+    def test_commands_page_lists_schedule_hostname(self) -> None:
+        CommandSchedule.objects.create(
+            command_key="lock_monitor",
+            params={"tenant_host": "acme.performio.com"},
+            schedule_type=CommandSchedule.CRON,
+            cron_expression="*/10 18-20 * * *",
+        )
+
+        response = self.client.get(reverse("commands"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Hostname")
+        self.assertContains(response, "lock_monitor")
+        self.assertContains(response, "acme.performio.com")
+
     @patch("ops.command_service.async_task")
     def test_command_run_create_queues_run(self, async_task_mock: Mock) -> None:
         params = {
@@ -640,7 +660,90 @@ class CommandsViewTests(TestCase):
         self.assertContains(response, 'name="tenant_host"')
         self.assertContains(response, 'data-command-param="tenant_host"')
         self.assertContains(response, '"long_running_seconds": 300')
+        self.assertContains(response, 'name="alert_threshold_seconds"')
+        self.assertContains(response, 'data-command-param="alert_agent_name"')
+        self.assertContains(response, 'data-command-param="alert_agent_id"')
+        self.assertContains(response, 'name="alert_recipient"')
         self.assertContains(response, "syncCommandParameterForm")
+
+    def test_backup_download_import_run_form_has_command_specific_fields(self) -> None:
+        response = self.client.get(
+            reverse("command_run_create"),
+            {"command": "backup_download_import"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        for field_name in (
+            "remote_host",
+            "ssh_user",
+            "remote_user",
+            "backup_command",
+            "remote_backup_path",
+            "local_backup_path",
+            "local_database",
+            "dry_run",
+            "overwrite_local",
+        ):
+            self.assertContains(response, f'name="{field_name}"')
+            self.assertContains(response, f'data-command-param="{field_name}"')
+        self.assertContains(response, "Backup command")
+        self.assertContains(response, "Remote backup path")
+
+    @patch("ops.command_service.async_task")
+    def test_backup_download_import_visible_fields_are_saved(
+        self, async_task_mock: Mock
+    ) -> None:
+        response = self.client.post(
+            reverse("command_run_create"),
+            {
+                "command_key": "backup_download_import",
+                "remote_host": "devbox.performio.co",
+                "ssh_user": "luanm",
+                "remote_user": "staff",
+                "database_server_url": "mysql.example.internal",
+                "schema_name": "tenant_acme",
+                "backup_command": (
+                    "backup-db --host {database_server_url} "
+                    "--schema {schema_name} --output {remote_backup_path}"
+                ),
+                "remote_backup_path": "/tmp/tenant_acme.sql.gz",
+                "backup_process_pattern": "",
+                "backup_poll_interval_seconds": "10",
+                "backup_timeout_seconds": "600",
+                "local_backup_path": "/tmp/tenant_acme.sql.gz",
+                "local_database": "performio_local",
+                "overwrite_local": "false",
+                "dry_run": "on",
+                "params_text": json.dumps({}),
+            },
+            HTTP_HX_REQUEST="true",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        run = CommandRun.objects.get()
+        self.assertEqual(
+            run.params,
+            {
+                "remote_host": "devbox.performio.co",
+                "ssh_user": "luanm",
+                "remote_user": "staff",
+                "database_server_url": "mysql.example.internal",
+                "schema_name": "tenant_acme",
+                "backup_command": (
+                    "backup-db --host {database_server_url} "
+                    "--schema {schema_name} --output {remote_backup_path}"
+                ),
+                "remote_backup_path": "/tmp/tenant_acme.sql.gz",
+                "backup_process_pattern": "",
+                "backup_poll_interval_seconds": 10,
+                "backup_timeout_seconds": 600,
+                "local_backup_path": "/tmp/tenant_acme.sql.gz",
+                "local_database": "performio_local",
+                "overwrite_local": False,
+                "dry_run": True,
+            },
+        )
+        async_task_mock.assert_called_once_with("ops.tasks.run_command_run", run.pk)
 
     def test_lock_monitor_schedule_form_hides_database_target_fields(self) -> None:
         response = self.client.get(
@@ -650,6 +753,9 @@ class CommandsViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
+        self.assertContains(response, 'name="alert_agent_name"')
+        self.assertContains(response, 'name="alert_agent_id"')
+        self.assertContains(response, 'name="alert_threshold_seconds"')
         self.assertRegex(
             content,
             r'data-command-param="database_server_url">\s*'
@@ -660,6 +766,29 @@ class CommandsViewTests(TestCase):
             r'data-command-param="schema_name">\s*'
             r'<legend class="fieldset-legend">Schema</legend>',
         )
+
+    def test_backup_download_import_schedule_form_has_command_specific_fields(
+        self,
+    ) -> None:
+        response = self.client.get(
+            reverse("command_schedule_create"),
+            {"command": "backup_download_import"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        for field_name in (
+            "remote_host",
+            "ssh_user",
+            "remote_user",
+            "backup_command",
+            "remote_backup_path",
+            "local_backup_path",
+            "local_database",
+            "dry_run",
+            "overwrite_local",
+        ):
+            self.assertContains(response, f'name="{field_name}"')
+            self.assertContains(response, f'data-command-param="{field_name}"')
 
     def test_lock_monitor_schedule_uses_only_tenant_host(self) -> None:
         response = self.client.post(
@@ -685,6 +814,133 @@ class CommandsViewTests(TestCase):
                 "tenant_host": "acme.performio.com",
                 "long_running_seconds": 300,
             },
+        )
+
+    def test_command_schedule_list_has_edit_action(self) -> None:
+        schedule = CommandSchedule.objects.create(
+            command_key="lock_monitor",
+            params={"tenant_host": "acme.performio.com"},
+            schedule_type=CommandSchedule.INTERVAL,
+            interval_minutes=60,
+        )
+
+        response = self.client.get(reverse("commands"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            reverse("command_schedule_update", args=[schedule.pk]),
+        )
+        self.assertContains(response, "Edit")
+
+    def test_command_schedule_update_form_uses_existing_values(self) -> None:
+        schedule = CommandSchedule.objects.create(
+            command_key="lock_monitor",
+            params={
+                "tenant_host": "ziegler.performio.co",
+                "long_running_seconds": 300,
+                "alert_threshold_seconds": 7200,
+                "alert_agent_name": "Slack Alert",
+            },
+            schedule_type=CommandSchedule.INTERVAL,
+            interval_minutes=5,
+            is_active=False,
+        )
+
+        response = self.client.get(
+            reverse("command_schedule_update", args=[schedule.pk]),
+            HTTP_HX_REQUEST="true",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "partials/_command_schedule_form.html")
+        self.assertEqual(response.headers["HX-Trigger"], "openCommandModal")
+        self.assertContains(response, "Edit Schedule")
+        self.assertContains(response, "ziegler.performio.co")
+        self.assertContains(response, 'name="alert_agent_name"')
+        self.assertContains(response, 'value="Slack Alert"')
+        self.assertContains(response, "&quot;alert_agent_name&quot;: &quot;Slack Alert&quot;")
+        self.assertContains(response, 'value="5"')
+
+    def test_command_schedule_update_saves_changes_and_resyncs_q_schedule(
+        self,
+    ) -> None:
+        schedule = CommandSchedule.objects.create(
+            command_key="lock_monitor",
+            params={"tenant_host": "old.performio.com", "long_running_seconds": 300},
+            schedule_type=CommandSchedule.INTERVAL,
+            interval_minutes=5,
+            is_active=False,
+        )
+
+        response = self.client.post(
+            reverse("command_schedule_update", args=[schedule.pk]),
+            {
+                "command_key": "lock_monitor",
+                "tenant_host": "new.performio.com",
+                "database_server_url": "",
+                "schema_name": "",
+                "params_text": json.dumps(
+                    {
+                        "long_running_seconds": 300,
+                    }
+                ),
+                "alert_threshold_seconds": "7200",
+                "alert_agent_name": "Slack Alert",
+                "alert_agent_id": "",
+                "alert_recipient": "me",
+                "schedule_type": CommandSchedule.INTERVAL,
+                "interval_minutes": "10",
+                "cron_expression": "",
+                "is_active": "on",
+            },
+            HTTP_HX_REQUEST="true",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        schedule.refresh_from_db()
+        self.assertEqual(schedule.params["tenant_host"], "new.performio.com")
+        self.assertEqual(schedule.params["alert_agent_name"], "Slack Alert")
+        self.assertEqual(schedule.params["alert_threshold_seconds"], 7200)
+        self.assertEqual(schedule.params["alert_recipient"], "me")
+        self.assertEqual(schedule.interval_minutes, 10)
+        self.assertTrue(schedule.is_active)
+        q_schedule = QSchedule.objects.get(name=schedule.q_schedule_name())
+        self.assertEqual(q_schedule.func, "ops.tasks.run_scheduled_command")
+        self.assertEqual(q_schedule.minutes, 10)
+        self.assertEqual(response.headers["HX-Retarget"], "#command-schedule-list")
+        self.assertEqual(response.headers["HX-Trigger"], "closeCommandModal")
+        self.assertContains(response, "new.performio.com")
+
+    def test_command_schedule_update_returns_errors(self) -> None:
+        schedule = CommandSchedule.objects.create(
+            command_key="lock_monitor",
+            params={"tenant_host": "old.performio.com", "long_running_seconds": 300},
+            schedule_type=CommandSchedule.INTERVAL,
+            interval_minutes=5,
+        )
+
+        response = self.client.post(
+            reverse("command_schedule_update", args=[schedule.pk]),
+            {
+                "command_key": "lock_monitor",
+                "tenant_host": "",
+                "params_text": "{not-json",
+                "schedule_type": CommandSchedule.INTERVAL,
+                "interval_minutes": "",
+                "cron_expression": "",
+            },
+            HTTP_HX_REQUEST="true",
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertTemplateUsed(response, "partials/_command_schedule_form.html")
+        self.assertContains(response, "Edit Schedule", status_code=422)
+        self.assertContains(response, "Invalid JSON", status_code=422)
+        self.assertContains(
+            response,
+            "Required when using interval scheduling.",
+            status_code=422,
         )
 
     def test_command_run_form_shows_json_errors(self) -> None:
@@ -824,6 +1080,7 @@ class CommandsViewTests(TestCase):
         self.assertIn("tenant_acme", output)
         self.assertIn("/tmp/backup.sql.gz", output)
         self.assertIn("wait for remote process matching 'backup.sql.gz'", output)
+        self.assertIn("mysql performio_local < /tmp/performio-backup.sql.gz", output)
 
     @patch("ops.commands.backup_download_import.time.sleep")
     @patch(
@@ -854,6 +1111,11 @@ class CommandsViewTests(TestCase):
         )
 
         self.assertEqual(subprocess_run_mock.call_count, 2)
+        ssh_command = subprocess_run_mock.call_args_list[0].args[0]
+        self.assertEqual(ssh_command[:2], ["ssh", "devbox.performio.co"])
+        self.assertEqual(len(ssh_command), 3)
+        self.assertIn("sudo -iu staff bash -lc", ssh_command[2])
+        self.assertIn("ps -ef | grep -F", ssh_command[2])
         sleep_mock.assert_called_once_with(15)
         self.assertIn("Remote backup finished after 16s", output_parts[-1])
         self.assertEqual(monotonic_mock.call_count, 3)
@@ -893,6 +1155,49 @@ class CommandsViewTests(TestCase):
     @patch("ops.commands.backup_download_import._import_backup")
     @patch("ops.commands.backup_download_import._wait_for_remote_backup")
     @patch("ops.commands.backup_download_import._run_command")
+    def test_backup_launch_quotes_entire_bash_command_for_ssh(
+        self,
+        run_command_mock: Mock,
+        wait_for_remote_backup_mock: Mock,
+        import_backup_mock: Mock,
+    ) -> None:
+        backup_command = (
+            'IGNORE="fs job_log" ./snapshot {database_server_url} '
+            "{schema_name} > {remote_backup_path} 2>snapshot.log &"
+        )
+
+        run_registered_command(
+            "backup_download_import",
+            {
+                "remote_host": "devbox.performio.co",
+                "ssh_user": "luanm",
+                "remote_user": "staff",
+                "database_server_url": "rds35.example.internal",
+                "schema_name": "demo_sdm_golden_demo_260128",
+                "backup_command": backup_command,
+                "remote_backup_path": "/tmp/demo_sdm_golden_demo_260128.sql",
+                "local_backup_path": "/tmp/demo_sdm_golden_demo_260128.sql",
+                "local_database": "performio_local",
+                "dry_run": False,
+            },
+        )
+
+        first_command = run_command_mock.call_args_list[0].args[0]
+        self.assertEqual(first_command[:2], ["ssh", "luanm@devbox.performio.co"])
+        self.assertEqual(len(first_command), 3)
+        self.assertIn("sudo -iu staff bash -lc", first_command[2])
+        self.assertIn(
+            "IGNORE=\"fs job_log\" ./snapshot rds35.example.internal "
+            "demo_sdm_golden_demo_260128 > "
+            "/tmp/demo_sdm_golden_demo_260128.sql 2>snapshot.log &",
+            first_command[2],
+        )
+        wait_for_remote_backup_mock.assert_called_once()
+        import_backup_mock.assert_called_once()
+
+    @patch("ops.commands.backup_download_import._import_backup")
+    @patch("ops.commands.backup_download_import._wait_for_remote_backup")
+    @patch("ops.commands.backup_download_import._run_command")
     def test_backup_waits_before_downloading(
         self,
         run_command_mock: Mock,
@@ -924,12 +1229,14 @@ class CommandsViewTests(TestCase):
         self,
         run_lock_monitor_mock: Mock,
     ) -> None:
-        run_lock_monitor_mock.return_value = SimpleNamespace(
-            pk=7,
+        capture = LockMonitorCapture.objects.create(
+            tenant_host="tenant.performio.com",
+            status=LockMonitorCapture.COMPLETED,
             data_source_count=1,
             process_count=4,
             lock_count=2,
         )
+        run_lock_monitor_mock.return_value = capture
 
         output = run_registered_command(
             "lock_monitor",
@@ -942,9 +1249,121 @@ class CommandsViewTests(TestCase):
             long_running_seconds=300,
             command_run_id=42,
         )
-        self.assertIn("capture #7", output)
+        self.assertIn(f"capture #{capture.pk}", output)
         self.assertIn("4 process(es)", output)
         self.assertIn("2 lock wait(s)", output)
+
+    @patch("ops.commands.lock_monitor.async_task")
+    @patch("ops.lock_monitor.run_lock_monitor")
+    def test_registered_lock_monitor_queues_agent_alert_for_overdue_jobs(
+        self,
+        run_lock_monitor_mock: Mock,
+        async_task_mock: Mock,
+    ) -> None:
+        agent = Agent.objects.create(
+            name="Slack Alert",
+            working_directory="/tmp",
+            mcp_servers=["slack"],
+        )
+        capture = LockMonitorCapture.objects.create(
+            tenant_host="tenant.performio.com",
+            status=LockMonitorCapture.COMPLETED,
+            data_source_count=1,
+            process_count=2,
+        )
+        LockMonitoringRecord.objects.create(
+            capture=capture,
+            record_type=LockMonitoringRecord.PROCESS,
+            database_server_url="tenant-db.example",
+            schema_name="tenant_schema",
+            process_id=44,
+            duration_seconds=7201,
+            state="Sending data",
+            query_text="select * from commission",
+        )
+        LockMonitoringRecord.objects.create(
+            capture=capture,
+            record_type=LockMonitoringRecord.PROCESS,
+            database_server_url="tenant-db.example",
+            schema_name="tenant_schema",
+            process_id=45,
+            duration_seconds=60,
+            query_text="select short_query",
+        )
+        run_lock_monitor_mock.return_value = capture
+
+        output = run_registered_command(
+            "lock_monitor",
+            {
+                "tenant_host": "tenant.performio.com",
+                "alert_threshold_seconds": 7200,
+                "alert_agent_id": str(agent.pk),
+                "alert_recipient": "me",
+            },
+        )
+
+        async_task_mock.assert_called_once()
+        task_name, agent_pk, prompt = async_task_mock.call_args.args
+        self.assertEqual(task_name, "agents.tasks.run_agent_prompt")
+        self.assertEqual(agent_pk, agent.pk)
+        self.assertIn("Send a Slack alert to me", prompt)
+        self.assertIn("1 MySQL job(s)", prompt)
+        self.assertIn("process 44", prompt)
+        self.assertIn("select * from commission", prompt)
+        self.assertIn("Alert queued for 1 overdue job(s).", output)
+
+    @patch("ops.commands.lock_monitor.async_task")
+    @patch("ops.lock_monitor.run_lock_monitor")
+    def test_registered_lock_monitor_skips_alert_without_agent(
+        self,
+        run_lock_monitor_mock: Mock,
+        async_task_mock: Mock,
+    ) -> None:
+        capture = LockMonitorCapture.objects.create(
+            tenant_host="tenant.performio.com",
+            status=LockMonitorCapture.COMPLETED,
+            data_source_count=1,
+            process_count=1,
+        )
+        LockMonitoringRecord.objects.create(
+            capture=capture,
+            record_type=LockMonitoringRecord.PROCESS,
+            database_server_url="tenant-db.example",
+            schema_name="tenant_schema",
+            process_id=44,
+            duration_seconds=7201,
+            query_text="select * from commission",
+        )
+        run_lock_monitor_mock.return_value = capture
+
+        output = run_registered_command(
+            "lock_monitor",
+            {
+                "tenant_host": "tenant.performio.com",
+                "alert_threshold_seconds": 7200,
+            },
+        )
+
+        async_task_mock.assert_not_called()
+        self.assertIn("Alert skipped", output)
+
+
+class AgentTaskTests(TestCase):
+    @patch("agents.agent_service.run_agent")
+    def test_run_agent_prompt_records_output(self, run_agent_mock: Mock) -> None:
+        from agents.tasks import run_agent_prompt
+
+        agent = Agent.objects.create(name="Slack Alert", working_directory="/tmp")
+        run_agent_mock.return_value = ["sent"]
+
+        result = run_agent_prompt(agent.pk, "Send a Slack alert")
+
+        run = AgentRun.objects.get()
+        self.assertEqual(result, f"completed run {run.pk}")
+        self.assertEqual(run.agent, agent)
+        self.assertEqual(run.prompt, "Send a Slack alert")
+        self.assertEqual(run.output, "sent")
+        self.assertEqual(run.status, AgentRun.COMPLETED)
 
 
 class LockMonitorCollectorTests(TestCase):
@@ -1408,8 +1827,33 @@ class LockMonitorViewTests(TestCase):
         self.assertContains(response, 'data-theme-surface="light"')
         self.assertContains(response, 'name="tenant_host"')
         self.assertContains(response, 'name="run_id"')
+        self.assertContains(response, 'name="captured_date"')
+        self.assertContains(response, 'name="from_time"')
+        self.assertContains(response, 'name="to_time"')
+        self.assertContains(response, 'name="auto_refresh"')
+        self.assertContains(response, "Pause refresh")
         self.assertContains(response, "Export Excel")
         self.assertContains(response, 'hx-trigger="every 10s"')
+
+    def test_lock_monitor_page_renders_paused_refresh_state(self) -> None:
+        response = self.client.get(reverse("lock_monitor"), {"auto_refresh": "0"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="auto_refresh"')
+        self.assertContains(response, 'value="0"')
+        self.assertContains(response, "Resume refresh")
+        self.assertNotContains(response, 'hx-trigger="every 10s"')
+
+    def test_lock_monitor_results_can_disable_auto_refresh(self) -> None:
+        response = self.client.get(
+            reverse("lock_monitor_results"),
+            {"auto_refresh": "0"},
+            HTTP_HX_REQUEST="true",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "auto_refresh=0")
+        self.assertNotContains(response, 'hx-trigger="every 10s"')
 
     @patch("ops.command_service.async_task")
     def test_lock_monitor_queues_registered_command(
@@ -1498,6 +1942,121 @@ class LockMonitorViewTests(TestCase):
         self.assertContains(response, f"Run #{matching_run.pk}")
         self.assertNotContains(response, "select other_run_query")
 
+    def test_lock_monitor_results_filter_by_captured_date_time_window(self) -> None:
+        capture = self._capture()
+        before_record = LockMonitoringRecord.objects.create(
+            capture=capture,
+            record_type=LockMonitoringRecord.PROCESS,
+            database_server_url="tenant-db.example",
+            schema_name="tenant_schema",
+            query_text="select before_fullcalc_event",
+        )
+        matching_record = LockMonitoringRecord.objects.create(
+            capture=capture,
+            record_type=LockMonitoringRecord.PROCESS,
+            database_server_url="tenant-db.example",
+            schema_name="tenant_schema",
+            query_text="select matching_fullcalc_event",
+        )
+        after_record = LockMonitoringRecord.objects.create(
+            capture=capture,
+            record_type=LockMonitoringRecord.PROCESS,
+            database_server_url="tenant-db.example",
+            schema_name="tenant_schema",
+            query_text="select after_fullcalc_event",
+        )
+        timezone_ = timezone.get_current_timezone()
+        LockMonitoringRecord.objects.filter(pk=before_record.pk).update(
+            captured_at=timezone.make_aware(
+                datetime(2026, 6, 10, 9, 59),
+                timezone_,
+            ),
+        )
+        LockMonitoringRecord.objects.filter(pk=matching_record.pk).update(
+            captured_at=timezone.make_aware(
+                datetime(2026, 6, 10, 10, 30),
+                timezone_,
+            ),
+        )
+        LockMonitoringRecord.objects.filter(pk=after_record.pk).update(
+            captured_at=timezone.make_aware(
+                datetime(2026, 6, 10, 11, 1),
+                timezone_,
+            ),
+        )
+
+        response = self.client.get(
+            reverse("lock_monitor_results"),
+            {
+                "captured_date": "2026-06-10",
+                "from_time": "10:00",
+                "to_time": "11:00",
+            },
+            HTTP_HX_REQUEST="true",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "select matching_fullcalc_event")
+        self.assertNotContains(response, "select before_fullcalc_event")
+        self.assertNotContains(response, "select after_fullcalc_event")
+
+    def test_lock_monitor_results_filters_captures_to_matching_records(self) -> None:
+        older_matching_capture = self._capture()
+        matching_record = LockMonitoringRecord.objects.create(
+            capture=older_matching_capture,
+            record_type=LockMonitoringRecord.PROCESS,
+            database_server_url="tenant-db.example",
+            schema_name="tenant_schema",
+            query_text="select older_fullcalc_event",
+        )
+        timezone_ = timezone.get_current_timezone()
+        LockMonitoringRecord.objects.filter(pk=matching_record.pk).update(
+            captured_at=timezone.make_aware(
+                datetime(2026, 6, 10, 10, 30),
+                timezone_,
+            ),
+        )
+        LockMonitorCapture.objects.filter(pk=older_matching_capture.pk).update(
+            started_at=timezone.make_aware(
+                datetime(2026, 6, 10, 10, 30),
+                timezone_,
+            ),
+        )
+        for index in range(5):
+            newer_capture = LockMonitorCapture.objects.create(
+                tenant_host=f"newer-{index}.performio.com",
+                status=LockMonitorCapture.COMPLETED,
+                process_count=1,
+            )
+            record = LockMonitoringRecord.objects.create(
+                capture=newer_capture,
+                record_type=LockMonitoringRecord.PROCESS,
+                database_server_url="tenant-db.example",
+                schema_name="tenant_schema",
+                query_text=f"select newer_event_{index}",
+            )
+            LockMonitoringRecord.objects.filter(pk=record.pk).update(
+                captured_at=timezone.make_aware(
+                    datetime(2026, 6, 10, 12, index),
+                    timezone_,
+                ),
+            )
+
+        response = self.client.get(
+            reverse("lock_monitor_results"),
+            {
+                "captured_date": "2026-06-10",
+                "from_time": "10:00",
+                "to_time": "11:00",
+            },
+            HTTP_HX_REQUEST="true",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "select older_fullcalc_event")
+        self.assertNotContains(response, "select newer_event_0")
+        self.assertContains(response, "1 captures")
+
     def test_lock_monitor_results_render_snapshot_sections(self) -> None:
         capture = LockMonitorCapture.objects.create(
             tenant_host="ziegler.performio.co",
@@ -1521,6 +2080,7 @@ class LockMonitorViewTests(TestCase):
             is_tenant_schema=True,
             is_long_running=True,
             explanation="Table commission; access=range; key=idx_status",
+            explain_json={"query_block": {"table": {"table_name": "commission"}}},
         )
         LockMonitoringRecord.objects.create(
             capture=capture,
@@ -1572,9 +2132,62 @@ class LockMonitorViewTests(TestCase):
         self.assertContains(response, "Active queries — ziegler_251124")
         self.assertContains(response, "Active queries — other schemas")
         self.assertContains(response, "Server health")
+        self.assertContains(response, "Likely issue")
+        self.assertContains(response, "Lock contention detected")
+        self.assertContains(response, "Top suspects")
+        self.assertContains(response, "Lock wait captured")
         self.assertContains(response, "select tenant_snapshot_query")
         self.assertContains(response, "select same_server_query")
         self.assertContains(response, "Table commission; access=range")
+        self.assertContains(response, "Raw EXPLAIN plan")
+        self.assertContains(response, "hx-preserve")
+
+    def test_lock_monitor_results_explains_no_lock_slow_query(self) -> None:
+        capture = LockMonitorCapture.objects.create(
+            tenant_host="ziegler.performio.co",
+            status=LockMonitorCapture.COMPLETED,
+            data_source_count=1,
+            process_count=1,
+            lock_count=0,
+        )
+        LockMonitoringRecord.objects.create(
+            capture=capture,
+            record_type=LockMonitoringRecord.PROCESS,
+            database_server_url="tenant-db.example",
+            schema_name="ziegler_251124",
+            database_name="ziegler_251124",
+            process_id=10,
+            user="config-user",
+            command="Query",
+            duration_seconds=7400,
+            state="Sending data",
+            query_text="select slow_calculation_query",
+            is_tenant_schema=True,
+            is_long_running=True,
+            contention_signals=[
+                "statement_temp_disk_tables",
+                "statement_no_index_used",
+                "high_rows_examined_to_sent",
+            ],
+        )
+
+        response = self.client.get(
+            reverse("lock_monitor_results"),
+            HTTP_HX_REQUEST="true",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "Long-running tenant query without an active lock wait",
+        )
+        self.assertContains(response, "Lock waits: 0")
+        self.assertContains(response, "Long-running tenant queries: 1")
+        self.assertContains(response, "Disk temp table")
+        self.assertContains(response, "No index used")
+        self.assertContains(response, "High rows examined")
+        self.assertContains(response, "Long-running query")
+        self.assertContains(response, "select slow_calculation_query")
 
     def test_lock_monitor_results_paginate_capture_snapshots(self) -> None:
         captures: list[LockMonitorCapture] = []

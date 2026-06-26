@@ -27,14 +27,19 @@ SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE_PATH = os.path.join(SCRIPT_DIR, 'dashboard_template.html')
 DATA_MARKER   = '__DATA_PLACEHOLDER__'
 BATCH_RE      = re.compile(r'Batch "([^"]+)"')
+GENERIC_TRANSFORMS = {"Plan Calculation", "Crediting Component"}
 
 # Queries larger than this are truncated in the dashboard (they're unreadable anyway).
 MAX_QUERY_CHARS = 50_000
+TEXT_TABLES = {
+    "queries": "query_text",
+    "details": "detail_text",
+}
 
 
 # ── Excel / SQLite loading ────────────────────────────────────────────────────
 
-def resolve_query(query_raw, xlsx_dir, db_con):
+def resolve_text(text_raw, xlsx_dir, db_con, table_name):
     """
     Return (display_text, db_id) for a cell value, or (None, None).
 
@@ -43,20 +48,22 @@ def resolve_query(query_raw, xlsx_dir, db_con):
       - string int   → SQLite row ID stored as text
       - "*.txt" path → legacy flat-file format
     """
-    if query_raw is None:
+    if text_raw is None:
         return None, None   # (display_text, db_id_for_export)
 
-    if isinstance(query_raw, (int, float)):
-        db_id = int(query_raw)
-        row = db_con.execute("SELECT query_text FROM queries WHERE id = ?", (db_id,)).fetchone() if db_con else None
+    text_column = TEXT_TABLES[table_name]
+
+    if isinstance(text_raw, (int, float)):
+        db_id = int(text_raw)
+        row = db_con.execute(f"SELECT {text_column} FROM {table_name} WHERE id = ?", (db_id,)).fetchone() if db_con else None
         text = row[0] if row else f"[Query id={db_id} not found in DB]"
         return _truncate(text), db_id
 
-    q = str(query_raw).strip()
+    q = str(text_raw).strip()
 
     if q.lstrip("-").isdigit() and db_con:
         db_id = int(q)
-        row = db_con.execute("SELECT query_text FROM queries WHERE id = ?", (db_id,)).fetchone()
+        row = db_con.execute(f"SELECT {text_column} FROM {table_name} WHERE id = ?", (db_id,)).fetchone()
         text = row[0] if row else f"[Query id={db_id} not found in DB]"
         return _truncate(text), db_id
 
@@ -72,6 +79,14 @@ def resolve_query(query_raw, xlsx_dir, db_con):
     return _truncate(q), None
 
 
+def resolve_query(query_raw, xlsx_dir, db_con):
+    return resolve_text(query_raw, xlsx_dir, db_con, "queries")
+
+
+def resolve_detail(detail_raw, xlsx_dir, db_con):
+    return resolve_text(detail_raw, xlsx_dir, db_con, "details")
+
+
 def _truncate(text):
     if text and len(text) > MAX_QUERY_CHARS:
         return text[:MAX_QUERY_CHARS] + f"\n\n… [truncated — {len(text):,} chars total, showing first {MAX_QUERY_CHARS:,}]"
@@ -79,41 +94,66 @@ def _truncate(text):
 
 
 def load_sheet(ws, xlsx_dir, db_con):
-    """Read one Excel sheet into a list of row dicts, plus the trace ID."""
+    """Read one Excel sheet into a list of row dicts, plus the trace ID and earliest start datetime."""
     rows     = []
     trace_id = None
+    min_start_dt = None
+    headers = {
+        str(ws.cell(1, c).value): c
+        for c in range(1, ws.max_column + 1)
+        if ws.cell(1, c).value is not None
+    }
+
+    def cell(row_idx, names, fallback_col=None):
+        for name in names:
+            if name in headers:
+                return ws.cell(row_idx, headers[name]).value
+        if fallback_col is not None:
+            return ws.cell(row_idx, fallback_col).value
+        return None
 
     for r in range(2, ws.max_row + 1):
-        transform = ws.cell(r, 3).value
+        transform = cell(r, ("transform",), 3)
         if transform is None:
             continue
 
-        step      = ws.cell(r, 2).value
-        start_dt  = ws.cell(r, 4).value
-        duration  = ws.cell(r, 6).value or 0
-        records   = ws.cell(r, 7).value
-        query_raw = ws.cell(r, 8).value
-        tid       = ws.cell(r, 9).value
+        step       = cell(r, ("step",), 2)
+        start_dt   = cell(r, ("start_time",), 4)
+        duration   = cell(r, ("duration_in_seconds", "duration"), 6) or 0
+        records    = cell(r, ("records_updated", "records"), 7)
+        query_raw  = cell(r, ("query",), 8)
+        detail_raw = cell(r, ("detail",))
+        tid        = cell(r, ("trace_id",), 9)
 
         if tid and trace_id is None:
             trace_id = str(tid)
 
+        if start_dt is not None and hasattr(start_dt, "isoformat"):
+            if min_start_dt is None or start_dt < min_start_dt:
+                min_start_dt = start_dt
+
         batch_match = BATCH_RE.search(str(step or ""))
         batch = batch_match.group(1) if batch_match else "Plan Calculations (untagged)"
 
+        display_name = str(step or "") if str(transform) in GENERIC_TRANSFORMS and step else str(transform)
         _q = resolve_query(query_raw, xlsx_dir, db_con)
+        _detail = resolve_detail(detail_raw, xlsx_dir, db_con)
         rows.append({
             "step":        str(step or ""),
             "transform":   str(transform),
+            "display_name": display_name,
             "batch":       batch,
+            "source_index": len(rows) + 1,
             "start_time":  start_dt.strftime("%H:%M:%S") if start_dt else None,
             "duration":    float(duration),
             "records":     int(records) if records is not None else None,
             "query":       _q[0],        # truncated display text
             "query_db_id": _q[1],        # SQLite row id (int) or None
+            "detail":      _detail[0],
+            "detail_db_id": _detail[1],
         })
 
-    return rows, trace_id
+    return rows, trace_id, min_start_dt
 
 
 def open_db_if_exists(xlsx_abs):
@@ -157,6 +197,13 @@ def align_transforms(runs_raw):
         d = defaultdict(list)
         for row in run["rows"]:
             d[(row["step"], row["transform"])].append(row)
+        # When the same sub-step repeats (e.g. "for Period 78" × 8), the execution
+        # order can differ across runs. Sort by duration so the shortest sub-step in
+        # run A is matched with the shortest in run B, not the one at the same log
+        # position — which would be wrong whenever the order changed.
+        for rows in d.values():
+            if len(rows) > 1:
+                rows.sort(key=lambda r: r["duration"])
         run_dicts.append(d)
 
     # Collect all (step, transform, occurrence) keys in global order
@@ -194,19 +241,36 @@ def align_transforms(runs_raw):
             m = BATCH_RE.search(step_val)
             batch = m.group(1) if m else "Plan Calculations (untagged)"
 
+        display_name = next((r["display_name"] for r in row_data if r), transform_val)
         transforms.append({
             "batch":       batch,
             "step":        step_val,
-            "transform":   transform_val,
+            "transform":   display_name,
+            "event":       transform_val,
+            "sourceIndexes": [r["source_index"] if r else None for r in row_data],
             "start_times": [r["start_time"] if r else None for r in row_data],
             "durations":   [round(r["duration"], 3) if r else None for r in row_data],
             "records":     [r["records"] if r else None for r in row_data],
             "queries":     [r["query"] if r else None for r in row_data],
             "queryDbIds":  [r["query_db_id"] if r else None for r in row_data],
+            "details":     [r["detail"] if r else None for r in row_data],
+            "detailDbIds": [r["detail_db_id"] if r else None for r in row_data],
         })
 
     same_length = all(all(d is not None for d in t["durations"]) for t in transforms)
     return transforms, same_length
+
+
+def has_same_step_sequence(runs_raw):
+    """Return True when every run has the same parsed step/event order."""
+    if len(runs_raw) <= 1:
+        return True
+
+    first = [(row["step"], row["transform"]) for row in runs_raw[0]["rows"]]
+    return all(
+        [(row["step"], row["transform"]) for row in run["rows"]] == first
+        for run in runs_raw[1:]
+    )
 
 
 def compute_regressions(transforms, ia, ib):
@@ -239,16 +303,29 @@ def build_data(xlsx_path):
     # Load each sheet into a run dict
     runs_raw = []
     for name in wb.sheetnames:
-        rows, trace_id = load_sheet(wb[name], xlsx_dir, db_con)
+        rows, trace_id, min_start_dt = load_sheet(wb[name], xlsx_dir, db_con)
         totals = batch_totals(rows)
         runs_raw.append({
-            "label":        name,
-            "total":        round(sum(r["duration"] for r in rows), 2),
-            "steps":        len(rows),
-            "rows":         rows,
-            "batch_totals": totals,
-            "trace_id":     trace_id,
+            "label":         name,
+            "total":         round(sum(r["duration"] for r in rows), 2),
+            "steps":         len(rows),
+            "rows":          rows,
+            "batch_totals":  totals,
+            "trace_id":      trace_id,
+            "min_start_dt":  min_start_dt,
         })
+
+    # Sort runs chronologically so default_a=first and default_b=last are meaningful.
+    # Excel sheet order is insertion order (often alphabetical by filename), which
+    # doesn't match run order when files are named by duration (e.g. 2H46M, 3H51M).
+    # Runs with no parseable start time sort last (1) so they don't become the baseline.
+    def _start_dt_key(run):
+        dt = run.get("min_start_dt")
+        if dt is None or not hasattr(dt, "isoformat"):
+            return (1, "")
+        return (0, dt.isoformat())
+
+    runs_raw.sort(key=_start_dt_key)
 
     if db_con:
         db_con.close()
@@ -278,6 +355,7 @@ def build_data(xlsx_path):
     ]
 
     transforms, same_length = align_transforms(runs_raw)
+    same_sequence = has_same_step_sequence(runs_raw)
     regressions = compute_regressions(transforms, ia, ib) if ia != ib else []
 
     worst   = regressions[0] if regressions else None
@@ -303,6 +381,8 @@ def build_data(xlsx_path):
         "worst_step_diff": round(worst["diff"], 1) if worst else None,
         "worst_step_name": worst["transform"] if worst else None,
         "same_length":     same_length,
+        "same_sequence":   same_sequence,
+        "match_mode":      "step + event + occurrence",
     }
 
 
@@ -374,4 +454,3 @@ if __name__ == "__main__":
         print("Usage: generate_dashboard.py <input.xlsx> <output.html>")
         sys.exit(1)
     generate(sys.argv[1], sys.argv[2])
-

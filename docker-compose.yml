@@ -1,0 +1,53 @@
+x-agentops: &agentops
+  build:
+    context: .
+  environment:
+    DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,web}"
+    DJANGO_DATABASE_PATH: /app/data/db.sqlite3
+    DJANGO_DEBUG: "${DJANGO_DEBUG:-true}"
+    DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY:-docker-local-development-key-change-me}"
+  volumes:
+    - type: bind
+      source: ./data
+      target: /app/data
+    - type: bind
+      source: ./tools/config.yaml
+      target: /app/tools/config.yaml
+      read_only: true
+
+services:
+  migrate:
+    <<: *agentops
+    command: ["python", "manage.py", "migrate", "--noinput"]
+    restart: "no"
+
+  web:
+    <<: *agentops
+    command: ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "${AGENTOPS_PORT:-8000}:8000"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/login/', timeout=3)",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  worker:
+    <<: *agentops
+    command: ["python", "manage.py", "qcluster"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    stop_grace_period: 30s

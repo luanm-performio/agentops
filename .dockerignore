@@ -1,0 +1,13 @@
+.git
+.gitignore
+.Codex
+.codex
+.agents
+.venv
+__pycache__
+*.py[cod]
+*.sqlite3
+data
+node_modules
+staticfiles
+tools/config.yaml

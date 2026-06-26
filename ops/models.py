@@ -58,6 +58,14 @@ class CommandSchedule(models.Model):
             return self.cron_expression
         return "-"
 
+    @property
+    def hostname_display(self) -> str:
+        for param_name in ("tenant_host", "database_server_url", "remote_host"):
+            value = self.params.get(param_name)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return "-"
+
     def q_schedule_name(self) -> str:
         return f"command-schedule-{self.pk}"
 

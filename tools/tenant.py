@@ -119,7 +119,7 @@ def find_tenant_data_sources(host_name: str, regions: list[Region]) -> list[Data
                     query = select(data_source)
                     if search:
                         query = query.where(
-                            data_source.c.shard_hosts.like(f"%{search}%")
+                            data_source.c.shard_hosts.like(f"{search}%")
                         )
                     rows = connection.execute(query).mappings()
 

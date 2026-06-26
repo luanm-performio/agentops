@@ -45,12 +45,7 @@ def run(params: CommandParams) -> str:
         [
             "ssh",
             remote_target,
-            "sudo",
-            "-iu",
-            remote_user,
-            "bash",
-            "-lc",
-            backup_command,
+            _remote_user_bash_command(remote_user, backup_command),
         ],
         ["scp", f"{remote_target}:{remote_backup_path}", local_backup_path],
     ]
@@ -62,7 +57,6 @@ def run(params: CommandParams) -> str:
         else f"CREATE DATABASE IF NOT EXISTS `{local_database}`;"
     )
     commands.append(["mysql", "-e", local_sql])
-    commands.append(["mysql", local_database, "<", local_backup_path])
 
     if dry_run:
         lines = [
@@ -75,6 +69,7 @@ def run(params: CommandParams) -> str:
                 f"timeout {backup_timeout_seconds}s)"
             ),
             *(_format_command(command) for command in commands[1:]),
+            f"mysql {local_database} < {local_backup_path}",
         ]
         return "Dry run. Commands that would run:\n" + "\n".join(lines)
 
@@ -120,12 +115,7 @@ def _wait_for_remote_backup(
     ssh_command = [
         "ssh",
         remote_target,
-        "sudo",
-        "-iu",
-        remote_user,
-        "bash",
-        "-lc",
-        status_command,
+        _remote_user_bash_command(remote_user, status_command),
     ]
     started_at = time.monotonic()
     output_parts.append(
@@ -180,6 +170,10 @@ def _remote_backup_status_command(
         'elif test -s "$backup_path"; then printf READY; '
         "else printf WAITING; fi"
     )
+
+
+def _remote_user_bash_command(remote_user: str, command: str) -> str:
+    return shlex.join(["sudo", "-iu", remote_user, "bash", "-lc", command])
 
 
 def _format_backup_command_template(
@@ -245,7 +239,7 @@ def _import_backup(
 def _format_command(command: list[str]) -> str:
     if "<" in command:
         return " ".join(command)
-    return " ".join(repr(part) if " " in part else part for part in command)
+    return shlex.join(command)
 
 
 COMMAND = CommandDefinition(

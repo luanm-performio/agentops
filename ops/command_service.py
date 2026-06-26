@@ -24,6 +24,14 @@ class CommandScheduleService:
         return schedule
 
     @staticmethod
+    def update(schedule: CommandSchedule) -> CommandSchedule:
+        if schedule.is_active:
+            CommandScheduleService._sync_q(schedule)
+        else:
+            CommandScheduleService._remove_q(schedule)
+        return schedule
+
+    @staticmethod
     def delete(schedule: CommandSchedule) -> None:
         CommandScheduleService._remove_q(schedule)
         schedule.delete()

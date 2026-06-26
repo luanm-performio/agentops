@@ -69,6 +69,88 @@
         font-size: 0.68rem;
     }
     .lock-monitor-shell .lm-stat strong { margin-left: 0.2rem; color: var(--lm-text); }
+    .lock-monitor-shell .lm-diagnosis {
+        margin: 0.8rem 1rem 0;
+        border: 1px solid #c9d8ec;
+        border-radius: 0.45rem;
+        padding: 0.75rem;
+        background: #f6f9fd;
+    }
+    .lock-monitor-shell .lm-diagnosis-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.8fr);
+        gap: 0.7rem;
+    }
+    .lock-monitor-shell .lm-diagnosis-label {
+        color: var(--lm-muted);
+        font-size: 0.6rem;
+        font-weight: 750;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+    .lock-monitor-shell .lm-diagnosis-value {
+        margin-top: 0.18rem;
+        color: var(--lm-text);
+        font-size: 0.82rem;
+        font-weight: 700;
+    }
+    .lock-monitor-shell .lm-diagnosis-note {
+        margin-top: 0.18rem;
+        color: #526b8a;
+        font-size: 0.72rem;
+        line-height: 1.45;
+    }
+    .lock-monitor-shell .lm-suspects {
+        margin-top: 0.75rem;
+        border-top: 1px solid #dbe5f1;
+        padding-top: 0.65rem;
+    }
+    .lock-monitor-shell .lm-suspect-list {
+        display: grid;
+        gap: 0.45rem;
+        margin-top: 0.45rem;
+    }
+    .lock-monitor-shell .lm-suspect {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 0.55rem;
+        align-items: start;
+        border: 1px solid var(--lm-border);
+        border-radius: 0.4rem;
+        padding: 0.55rem;
+        background: #ffffff;
+    }
+    .lock-monitor-shell .lm-severity {
+        border-radius: 999px;
+        padding: 0.14rem 0.42rem;
+        font-size: 0.58rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+    .lock-monitor-shell .lm-severity-critical { background: #fff1f2; color: #a92331; }
+    .lock-monitor-shell .lm-severity-warning { background: #fff7ed; color: #9a4916; }
+    .lock-monitor-shell .lm-severity-watch { background: #eff6ff; color: #1d4e89; }
+    .lock-monitor-shell .lm-suspect-title {
+        font-size: 0.72rem;
+        font-weight: 700;
+    }
+    .lock-monitor-shell .lm-suspect-meta {
+        margin-top: 0.12rem;
+        color: var(--lm-muted);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.62rem;
+    }
+    .lock-monitor-shell .lm-suspect-query {
+        margin-top: 0.3rem;
+        color: #1d4e89;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.64rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
     .lock-monitor-shell .lm-message {
         margin: 0.75rem 1rem 0;
         border: 1px solid #edc7a9;
@@ -234,12 +316,16 @@
     @media (max-width: 760px) {
         .lock-monitor-shell .lm-snapshot-header { align-items: flex-start; flex-direction: column; }
         .lock-monitor-shell .lm-health-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .lock-monitor-shell .lm-diagnosis-grid { grid-template-columns: 1fr; }
+        .lock-monitor-shell .lm-suspect { grid-template-columns: 1fr; }
     }
 </style>
 
 <div class="lm-paged-feed"
      hx-get="{% url 'lock_monitor_results' %}?page={{ capture_page.number }}{% if filter_query %}&amp;{{ filter_query }}{% endif %}"
+     {% if auto_refresh_enabled %}
      hx-trigger="every 10s"
+     {% endif %}
      hx-target="#lock-monitor-results"
      hx-swap="innerHTML"
      hx-indicator="#lock-monitor-refresh-spinner">
@@ -275,9 +361,68 @@
             <span class="lm-stat">Sources <strong>{{ snapshot.capture.data_source_count }}</strong></span>
             <span class="lm-stat">Processes <strong>{{ snapshot.capture.process_count }}</strong></span>
             <span class="lm-stat">Lock waits <strong>{{ snapshot.capture.lock_count }}</strong></span>
+            <span class="lm-stat">Long running <strong>{{ snapshot.diagnosis.long_running_count }}</strong></span>
             <span class="lm-stat">Shown <strong>{{ snapshot.shown_record_count }}</strong></span>
             {% if snapshot.capture.completed_at %}<span class="lm-stat">Completed <strong>{{ snapshot.capture.completed_at|date:"H:i:s" }}</strong></span>{% endif %}
         </div>
+
+        <section class="lm-diagnosis">
+            <div class="lm-diagnosis-grid">
+                <div>
+                    <p class="lm-diagnosis-label">Likely issue</p>
+                    <p class="lm-diagnosis-value">{{ snapshot.diagnosis.likely_issue }}</p>
+                    <p class="lm-diagnosis-note">
+                        Lock waits: {{ snapshot.diagnosis.lock_wait_count }} ·
+                        Long-running tenant queries: {{ snapshot.diagnosis.long_running_count }}
+                    </p>
+                </div>
+                <div>
+                    <p class="lm-diagnosis-label">What to check next</p>
+                    <p class="lm-diagnosis-note">{{ snapshot.diagnosis.next_step }}</p>
+                    {% if snapshot.diagnosis.signal_labels %}
+                    <div class="mt-2">
+                        {% for signal in snapshot.diagnosis.signal_labels %}<span class="lm-signal">{{ signal }}</span>{% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="lm-suspects">
+                <div class="lm-section-heading">
+                    <h3 class="lm-section-title">Top suspects</h3>
+                    <span class="lm-section-count">{{ snapshot.top_suspects|length }}</span>
+                </div>
+                {% if snapshot.top_suspects %}
+                <div class="lm-suspect-list">
+                    {% for suspect in snapshot.top_suspects %}
+                    <div class="lm-suspect">
+                        <span class="lm-severity lm-severity-{{ suspect.severity }}">{{ suspect.severity }}</span>
+                        <div>
+                            <p class="lm-suspect-title">{{ suspect.reason }}</p>
+                            <p class="lm-suspect-meta">
+                                {% if suspect.record.record_type == "lock_wait" %}
+                                    waiting {{ suspect.record.waiting_process_id|default:"—" }} blocked by {{ suspect.record.blocking_process_id|default:"—" }}
+                                {% else %}
+                                    thread {{ suspect.record.process_id|default:"—" }}
+                                {% endif %}
+                                · {{ suspect.record.schema_name|default:"unknown schema" }}
+                                · {{ suspect.record.duration_seconds|default:"0" }}s
+                            </p>
+                            <p class="lm-suspect-query">{{ suspect.record.query_text|default:suspect.record.blocking_query_text|default:"No query text captured" }}</p>
+                            {% if suspect.signal_labels %}
+                            <div class="mt-2">
+                                {% for signal in suspect.signal_labels %}<span class="lm-signal">{{ signal }}</span>{% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% if suspect.record.is_long_running %}<span class="lm-signal">Long running</span>{% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="lm-none">No lock waits, long-running tenant queries, or suspicious statement signals in this capture.</p>
+                {% endif %}
+            </div>
+        </section>
 
         {% if snapshot.capture.error %}
         <div class="lm-message lm-message-error">{{ snapshot.capture.error }}</div>
@@ -366,7 +511,7 @@
                                     <p class="lm-analysis-title">Query analysis · thread {{ record.process_id }}</p>
                                     <pre>{{ record.explanation }}</pre>
                                     {% if record.explain_json %}
-                                    <details class="mt-2">
+                                    <details id="lock-monitor-explain-{{ record.pk }}" class="mt-2" hx-preserve>
                                         <summary class="cursor-pointer lm-muted">Raw EXPLAIN plan</summary>
                                         <pre class="mt-2">{{ record.explain_json }}</pre>
                                     </details>

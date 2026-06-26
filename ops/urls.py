@@ -46,6 +46,11 @@ urlpatterns = [
         name="command_schedule_toggle",
     ),
     path(
+        "commands/schedules/<int:pk>/edit/",
+        views.command_schedule_update,
+        name="command_schedule_update",
+    ),
+    path(
         "commands/schedules/<int:pk>/delete/",
         views.command_schedule_delete,
         name="command_schedule_delete",

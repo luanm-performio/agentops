@@ -95,6 +95,95 @@ class LockMonitorRunForm(forms.Form):
         return tenant_host
 
 
+COMMAND_PARAMETER_FIELD_NAMES = (
+    "tenant_host",
+    "remote_host",
+    "ssh_user",
+    "remote_user",
+    "database_server_url",
+    "schema_name",
+    "backup_command",
+    "remote_backup_path",
+    "backup_process_pattern",
+    "backup_poll_interval_seconds",
+    "backup_timeout_seconds",
+    "local_backup_path",
+    "local_database",
+    "overwrite_local",
+    "dry_run",
+    "alert_threshold_seconds",
+    "alert_agent_id",
+    "alert_agent_name",
+    "alert_recipient",
+)
+
+REQUIRED_COMMAND_FIELDS = {
+    "backup_download_import": {
+        "remote_host": "Remote host is required.",
+        "remote_user": "Remote user is required.",
+        "database_server_url": "Database server is required.",
+        "schema_name": "Schema is required.",
+        "backup_command": "Backup command is required.",
+        "remote_backup_path": "Remote backup path is required.",
+        "backup_poll_interval_seconds": "Backup poll interval is required.",
+        "backup_timeout_seconds": "Backup timeout is required.",
+        "local_backup_path": "Local backup path is required.",
+        "local_database": "Local database is required.",
+    },
+    "lock_monitor": {"tenant_host": "Tenant host is required."},
+}
+
+
+def _command_text_input(placeholder: str) -> forms.TextInput:
+    return forms.TextInput(
+        attrs={
+            "class": "input input-bordered w-full font-mono",
+            "placeholder": placeholder,
+        }
+    )
+
+
+def _command_textarea(
+    *, placeholder: str, height_class: str = "h-24"
+) -> forms.Textarea:
+    return forms.Textarea(
+        attrs={
+            "class": f"textarea textarea-bordered w-full {height_class} font-mono",
+            "placeholder": placeholder,
+            "spellcheck": "false",
+        }
+    )
+
+
+def _command_number_input(
+    *,
+    placeholder: str,
+    maximum: int,
+    minimum: int = 1,
+) -> forms.NumberInput:
+    return forms.NumberInput(
+        attrs={
+            "class": "input input-bordered w-full font-mono",
+            "placeholder": placeholder,
+            "min": str(minimum),
+            "max": str(maximum),
+        }
+    )
+
+
+def _command_checkbox() -> forms.CheckboxInput:
+    return forms.CheckboxInput(attrs={"class": "checkbox checkbox-sm"})
+
+
+def _set_command_parameter_initials(
+    form: forms.Form,
+    params: dict[str, object],
+) -> None:
+    for field_name in COMMAND_PARAMETER_FIELD_NAMES:
+        if field_name in form.fields:
+            form.fields[field_name].initial = params.get(field_name, "")
+
+
 class CommandRunForm(forms.Form):
     command_key = forms.ChoiceField(
         choices=command_choices,
@@ -109,6 +198,21 @@ class CommandRunForm(forms.Form):
                 "placeholder": "tenant.performio.com",
             }
         ),
+    )
+    remote_host = forms.CharField(
+        label="Remote host",
+        required=False,
+        widget=_command_text_input("devbox.performio.co"),
+    )
+    ssh_user = forms.CharField(
+        label="SSH user",
+        required=False,
+        widget=_command_text_input("optional jump/login user"),
+    )
+    remote_user = forms.CharField(
+        label="Remote command user",
+        required=False,
+        widget=_command_text_input("staff"),
     )
     database_server_url = forms.CharField(
         label="Database server",
@@ -130,11 +234,91 @@ class CommandRunForm(forms.Form):
             }
         ),
     )
+    backup_command = forms.CharField(
+        label="Backup command",
+        required=False,
+        widget=_command_textarea(
+            placeholder=(
+                "backup-db --host {database_server_url} "
+                "--schema {schema_name} --output {remote_backup_path}"
+            )
+        ),
+    )
+    remote_backup_path = forms.CharField(
+        label="Remote backup path",
+        required=False,
+        widget=_command_text_input("/tmp/tenant_schema.sql.gz"),
+    )
+    backup_process_pattern = forms.CharField(
+        label="Backup process pattern",
+        required=False,
+        widget=_command_text_input("defaults to the remote backup filename"),
+    )
+    backup_poll_interval_seconds = forms.IntegerField(
+        label="Backup poll interval (seconds)",
+        min_value=1,
+        max_value=300,
+        required=False,
+        widget=_command_number_input(placeholder="15", maximum=300),
+    )
+    backup_timeout_seconds = forms.IntegerField(
+        label="Backup timeout (seconds)",
+        min_value=1,
+        max_value=7200,
+        required=False,
+        widget=_command_number_input(placeholder="7200", maximum=7200),
+    )
+    local_backup_path = forms.CharField(
+        label="Local backup path",
+        required=False,
+        widget=_command_text_input("/tmp/performio-backup.sql.gz"),
+    )
+    local_database = forms.CharField(
+        label="Local database",
+        required=False,
+        widget=_command_text_input("performio_local"),
+    )
+    overwrite_local = forms.BooleanField(
+        label="Overwrite local database",
+        required=False,
+        widget=_command_checkbox(),
+    )
+    dry_run = forms.BooleanField(
+        label="Dry run",
+        required=False,
+        widget=_command_checkbox(),
+    )
+    alert_threshold_seconds = forms.IntegerField(
+        label="Alert threshold (seconds)",
+        min_value=0,
+        max_value=86400,
+        required=False,
+        widget=_command_number_input(
+            placeholder="7200",
+            maximum=86400,
+            minimum=0,
+        ),
+    )
+    alert_agent_id = forms.CharField(
+        label="Alert agent ID",
+        required=False,
+        widget=_command_text_input("optional numeric agent id"),
+    )
+    alert_agent_name = forms.CharField(
+        label="Alert agent name",
+        required=False,
+        widget=_command_text_input("Slack Alert Agent"),
+    )
+    alert_recipient = forms.CharField(
+        label="Alert recipient",
+        required=False,
+        widget=_command_text_input("me"),
+    )
     params_text = forms.CharField(
         label="Parameters",
         widget=forms.Textarea(
             attrs={
-                "class": "textarea textarea-bordered w-full h-64 font-mono",
+                "class": "textarea textarea-bordered w-full h-40 font-mono",
                 "spellcheck": "false",
             }
         ),
@@ -160,6 +344,7 @@ class CommandRunForm(forms.Form):
         self.fields["schema_name"].initial = command.default_params.get(
             "schema_name", ""
         )
+        _set_command_parameter_initials(self, command.default_params)
 
     def clean_params_text(self) -> dict:
         raw = self.cleaned_data["params_text"]
@@ -195,6 +380,21 @@ class CommandScheduleForm(forms.ModelForm):
             }
         ),
     )
+    remote_host = forms.CharField(
+        label="Remote host",
+        required=False,
+        widget=_command_text_input("devbox.performio.co"),
+    )
+    ssh_user = forms.CharField(
+        label="SSH user",
+        required=False,
+        widget=_command_text_input("optional jump/login user"),
+    )
+    remote_user = forms.CharField(
+        label="Remote command user",
+        required=False,
+        widget=_command_text_input("staff"),
+    )
     database_server_url = forms.CharField(
         label="Database server",
         required=False,
@@ -215,11 +415,91 @@ class CommandScheduleForm(forms.ModelForm):
             }
         ),
     )
+    backup_command = forms.CharField(
+        label="Backup command",
+        required=False,
+        widget=_command_textarea(
+            placeholder=(
+                "backup-db --host {database_server_url} "
+                "--schema {schema_name} --output {remote_backup_path}"
+            )
+        ),
+    )
+    remote_backup_path = forms.CharField(
+        label="Remote backup path",
+        required=False,
+        widget=_command_text_input("/tmp/tenant_schema.sql.gz"),
+    )
+    backup_process_pattern = forms.CharField(
+        label="Backup process pattern",
+        required=False,
+        widget=_command_text_input("defaults to the remote backup filename"),
+    )
+    backup_poll_interval_seconds = forms.IntegerField(
+        label="Backup poll interval (seconds)",
+        min_value=1,
+        max_value=300,
+        required=False,
+        widget=_command_number_input(placeholder="15", maximum=300),
+    )
+    backup_timeout_seconds = forms.IntegerField(
+        label="Backup timeout (seconds)",
+        min_value=1,
+        max_value=7200,
+        required=False,
+        widget=_command_number_input(placeholder="7200", maximum=7200),
+    )
+    local_backup_path = forms.CharField(
+        label="Local backup path",
+        required=False,
+        widget=_command_text_input("/tmp/performio-backup.sql.gz"),
+    )
+    local_database = forms.CharField(
+        label="Local database",
+        required=False,
+        widget=_command_text_input("performio_local"),
+    )
+    overwrite_local = forms.BooleanField(
+        label="Overwrite local database",
+        required=False,
+        widget=_command_checkbox(),
+    )
+    dry_run = forms.BooleanField(
+        label="Dry run",
+        required=False,
+        widget=_command_checkbox(),
+    )
+    alert_threshold_seconds = forms.IntegerField(
+        label="Alert threshold (seconds)",
+        min_value=0,
+        max_value=86400,
+        required=False,
+        widget=_command_number_input(
+            placeholder="7200",
+            maximum=86400,
+            minimum=0,
+        ),
+    )
+    alert_agent_id = forms.CharField(
+        label="Alert agent ID",
+        required=False,
+        widget=_command_text_input("optional numeric agent id"),
+    )
+    alert_agent_name = forms.CharField(
+        label="Alert agent name",
+        required=False,
+        widget=_command_text_input("Slack Alert Agent"),
+    )
+    alert_recipient = forms.CharField(
+        label="Alert recipient",
+        required=False,
+        widget=_command_text_input("me"),
+    )
     params_text = forms.CharField(
         label="Parameters",
         widget=forms.Textarea(
             attrs={
-                "class": "textarea textarea-bordered w-full h-48 font-mono",
+                "class": "textarea textarea-bordered w-full h-36 font-mono",
                 "spellcheck": "false",
             }
         ),
@@ -266,6 +546,7 @@ class CommandScheduleForm(forms.ModelForm):
         command_key = (
             self.data.get("command_key")
             or self.initial.get("command_key")
+            or (self.instance.command_key if self.instance and self.instance.pk else "")
             or command_choices()[0][0]
         )
         params = (
@@ -279,6 +560,7 @@ class CommandScheduleForm(forms.ModelForm):
             "database_server_url", ""
         )
         self.fields["schema_name"].initial = params.get("schema_name", "")
+        _set_command_parameter_initials(self, params)
 
     def clean_params_text(self) -> dict:
         raw = self.cleaned_data["params_text"]
@@ -320,21 +602,23 @@ def _merge_command_explicit_params(form: forms.Form, cleaned: dict) -> dict:
 
     command_key = str(cleaned.get("command_key", ""))
     command_params = get_command(command_key).default_params
-    required_fields = {
-        "backup_download_import": {
-            "database_server_url": "Database server is required.",
-            "schema_name": "Schema is required.",
-        },
-        "lock_monitor": {"tenant_host": "Tenant host is required."},
-    }.get(command_key, {})
-    explicit_params: dict[str, str] = {}
+    required_fields = REQUIRED_COMMAND_FIELDS.get(command_key, {})
+    explicit_params: dict[str, object] = {}
 
-    for field_name in ("tenant_host", "database_server_url", "schema_name"):
+    for field_name in COMMAND_PARAMETER_FIELD_NAMES:
         if field_name not in command_params:
             continue
-        value = str(cleaned.get(field_name, "")).strip()
+
+        if field_name not in cleaned:
+            continue
+        if form.is_bound and field_name not in form.data:
+            continue
+
+        value = cleaned.get(field_name)
+        if isinstance(value, str):
+            value = value.strip()
         explicit_params[field_name] = value
-        if not value and field_name in required_fields:
+        if value in {"", None} and field_name in required_fields:
             form.add_error(field_name, required_fields[field_name])
 
     cleaned["params_text"] = {**params, **explicit_params}

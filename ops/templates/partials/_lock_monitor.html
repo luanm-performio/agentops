@@ -132,13 +132,17 @@
         .lock-monitor-shell .lm-queued a { color: inherit; text-decoration: underline; }
         .lock-monitor-shell .lm-filters {
             display: grid;
-            grid-template-columns: 7rem 1.2fr 1fr 10rem 1.5fr auto;
+            grid-template-columns: 7rem 1.1fr 1fr 9rem 8rem 8rem 8rem 1.3fr minmax(15rem, auto);
             gap: 0.65rem;
             padding: 1rem 1.5rem;
             border-bottom: 1px solid var(--lm-border);
             background: #f8fafc;
         }
-        .lock-monitor-shell .lm-filter-actions { display: flex; align-items: flex-end; }
+        .lock-monitor-shell .lm-filter-actions {
+            display: flex;
+            align-items: flex-end;
+            gap: 0.45rem;
+        }
         .lock-monitor-shell .lm-results { padding: 1.25rem 1.5rem 1.5rem; }
         .lock-monitor-shell .text-error { color: #b42332; }
         @media (max-width: 1050px) {
@@ -199,8 +203,12 @@
                 <span id="lock-monitor-spinner" class="loading loading-spinner loading-xs htmx-indicator"></span>
             </button>
         </form>
-        <div class="self-end text-right text-xs lm-muted">
+        <div id="lock-monitor-refresh-status" class="self-end text-right text-xs lm-muted">
+            {% if auto_refresh_enabled %}
             Captures refresh automatically<br>every 10 seconds
+            {% else %}
+            Capture refresh paused
+            {% endif %}
         </div>
     </div>
 
@@ -222,6 +230,10 @@
           hx-trigger="input changed delay:300ms, change"
           hx-indicator="#lock-monitor-refresh-spinner"
           class="lm-filters">
+        <input id="lock-monitor-auto-refresh"
+               name="auto_refresh"
+               type="hidden"
+               value="{% if auto_refresh_enabled %}1{% else %}0{% endif %}">
         <label>
             <span class="lm-label">Run ID</span>
             <input name="run_id" type="number" min="1" value="{{ run_id_filter }}" class="input input-sm w-full font-mono" autocomplete="off">
@@ -244,11 +256,29 @@
             </select>
         </label>
         <label>
+            <span class="lm-label">Date</span>
+            <input name="captured_date" type="date" value="{{ captured_date_filter }}" class="input input-sm w-full" autocomplete="off">
+        </label>
+        <label>
+            <span class="lm-label">From time</span>
+            <input name="from_time" type="time" value="{{ from_time_filter }}" class="input input-sm w-full" autocomplete="off">
+        </label>
+        <label>
+            <span class="lm-label">To time</span>
+            <input name="to_time" type="time" value="{{ to_time_filter }}" class="input input-sm w-full" autocomplete="off">
+        </label>
+        <label>
             <span class="lm-label">Query, user, or state</span>
             <input name="search" value="{{ search_filter }}" class="input input-sm w-full" autocomplete="off">
         </label>
         <div class="lm-filter-actions">
-            <button type="button" class="lm-button lm-button-secondary w-full" onclick="window.exportLockMonitorResults()">
+            <button id="lock-monitor-refresh-toggle"
+                    type="button"
+                    class="lm-button lm-button-secondary"
+                    onclick="window.toggleLockMonitorRefresh(this)">
+                {% if auto_refresh_enabled %}Pause refresh{% else %}Resume refresh{% endif %}
+            </button>
+            <button type="button" class="lm-button lm-button-secondary" onclick="window.exportLockMonitorResults()">
                 Export Excel
             </button>
         </div>
@@ -268,6 +298,20 @@
         const form = document.getElementById("lock-monitor-filter-form");
         const query = new URLSearchParams(new FormData(form));
         window.location.assign("{% url 'lock_monitor_export' %}?" + query.toString());
+    };
+    window.toggleLockMonitorRefresh = function (button) {
+        const form = document.getElementById("lock-monitor-filter-form");
+        const input = document.getElementById("lock-monitor-auto-refresh");
+        const status = document.getElementById("lock-monitor-refresh-status");
+        const isEnabled = input.value !== "0";
+        input.value = isEnabled ? "0" : "1";
+        button.textContent = isEnabled ? "Resume refresh" : "Pause refresh";
+        if (status) {
+            status.innerHTML = isEnabled
+                ? "Capture refresh paused"
+                : "Captures refresh automatically<br>every 10 seconds";
+        }
+        form.dispatchEvent(new Event("change", { bubbles: true }));
     };
 </script>
 {% endif %}

@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import datetime, time
 
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
@@ -7,6 +8,8 @@ from django.db.models import Q, QuerySet
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
+from django.utils.dateparse import parse_date, parse_time
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
@@ -270,6 +273,7 @@ def _lock_monitor_context(
         else request.GET.get("run_id", "").strip()
     )
     tenant_host = request.GET.get("tenant_host", "").strip()
+    auto_refresh_enabled = request.GET.get("auto_refresh", "1") != "0"
     captures = LockMonitorCapture.objects.select_related("command_run")
     if run_id:
         captures = (
@@ -280,12 +284,14 @@ def _lock_monitor_context(
     if tenant_host:
         captures = captures.filter(tenant_host__icontains=tenant_host)
 
+    filtered_records = _filtered_lock_monitor_records(request)
+    if _has_lock_monitor_record_filters(request):
+        captures = captures.filter(pk__in=filtered_records.values("capture_id"))
+
     capture_page = Paginator(captures, 5).get_page(request.GET.get("page"))
     capture_list = list(capture_page.object_list)
     capture_ids = [capture.pk for capture in capture_list]
-    records = list(
-        _filtered_lock_monitor_records(request).filter(capture_id__in=capture_ids)
-    )
+    records = list(filtered_records.filter(capture_id__in=capture_ids))
     records_by_capture: dict[int, list[LockMonitoringRecord]] = {
         capture_id: [] for capture_id in capture_ids
     }
@@ -315,7 +321,11 @@ def _lock_monitor_context(
         "tenant_host_filter": tenant_host,
         "schema_filter": request.GET.get("schema", "").strip(),
         "record_type_filter": request.GET.get("record_type", "").strip(),
+        "captured_date_filter": request.GET.get("captured_date", "").strip(),
+        "from_time_filter": request.GET.get("from_time", "").strip(),
+        "to_time_filter": request.GET.get("to_time", "").strip(),
         "search_filter": request.GET.get("search", "").strip(),
+        "auto_refresh_enabled": auto_refresh_enabled,
         "record_types": LockMonitoringRecord.RECORD_TYPES,
     }
 
@@ -368,10 +378,18 @@ def _lock_monitor_snapshot_context(
         status = "watch"
         status_label = "Activity observed"
 
+    diagnosis = _lock_monitor_diagnosis(capture, tenant_records, lock_records)
+    top_suspects = _lock_monitor_top_suspects(
+        [*lock_records, *tenant_records],
+        limit=5,
+    )
+
     return {
         "capture": capture,
         "status": status,
         "status_label": status_label,
+        "diagnosis": diagnosis,
+        "top_suspects": top_suspects,
         "tenant_schema": tenant_schema,
         "lock_records": lock_records,
         "tenant_records": tenant_records,
@@ -379,6 +397,159 @@ def _lock_monitor_snapshot_context(
         "resource_records": resource_records,
         "shown_record_count": len(records),
     }
+
+
+def _lock_monitor_diagnosis(
+    capture: LockMonitorCapture,
+    tenant_records: list[LockMonitoringRecord],
+    lock_records: list[LockMonitoringRecord],
+) -> dict[str, object]:
+    tenant_signal_counts: dict[str, int] = {}
+    for record in tenant_records:
+        for signal in record.contention_signals:
+            tenant_signal_counts[signal] = tenant_signal_counts.get(signal, 0) + 1
+
+    long_running_count = sum(record.is_long_running for record in tenant_records)
+    likely_issue = "No active lock wait found"
+    next_step = (
+        "If the calculation is slow, inspect long-running queries, repeated query "
+        "patterns, or application-side calculation steps."
+    )
+
+    if capture.status == LockMonitorCapture.FAILED:
+        likely_issue = "Capture failed"
+        next_step = "Fix the capture error before diagnosing query runtime."
+    elif lock_records or capture.lock_count:
+        likely_issue = "Lock contention detected"
+        next_step = (
+            "Start with the blocking query or sleeping transaction, then check "
+            "whether it belongs to this tenant or another schema."
+        )
+    elif long_running_count:
+        likely_issue = "Long-running tenant query without an active lock wait"
+        next_step = (
+            "Treat this as query/runtime slowness: check EXPLAIN, rows examined, "
+            "temp disk tables, no-index signals, and calculation step logs."
+        )
+    elif tenant_signal_counts:
+        likely_issue = "Suspicious query runtime signals"
+        next_step = (
+            "No lock wait is visible, but statement/server metrics show work that "
+            "can slow calculations."
+        )
+    elif capture.warning:
+        likely_issue = "Capture warnings need review"
+        next_step = "Some diagnostic sources were unavailable; review the warning text."
+    elif capture.status == LockMonitorCapture.RUNNING:
+        likely_issue = "Capture still running"
+        next_step = "Wait for completion before drawing a conclusion."
+
+    signal_labels = [
+        _lock_monitor_signal_label(signal)
+        for signal, _count in sorted(
+            tenant_signal_counts.items(),
+            key=lambda item: (-item[1], item[0]),
+        )[:6]
+    ]
+
+    return {
+        "likely_issue": likely_issue,
+        "next_step": next_step,
+        "long_running_count": long_running_count,
+        "lock_wait_count": len(lock_records) or capture.lock_count,
+        "signal_labels": signal_labels,
+    }
+
+
+def _lock_monitor_top_suspects(
+    records: list[LockMonitoringRecord],
+    *,
+    limit: int,
+) -> list[dict[str, object]]:
+    scored = [
+        (_lock_monitor_record_score(record), record)
+        for record in records
+        if record.record_type == LockMonitoringRecord.LOCK_WAIT
+        or record.is_long_running
+        or record.contention_signals
+    ]
+    scored.sort(
+        key=lambda item: (
+            -item[0],
+            -(item[1].duration_seconds or 0),
+            item[1].schema_name,
+            item[1].process_id or item[1].waiting_process_id or 0,
+        )
+    )
+    return [
+        {
+            "record": record,
+            "severity": _lock_monitor_record_severity(score),
+            "reason": _lock_monitor_record_reason(record),
+            "signal_labels": [
+                _lock_monitor_signal_label(signal)
+                for signal in record.contention_signals[:5]
+            ],
+        }
+        for score, record in scored[:limit]
+    ]
+
+
+def _lock_monitor_record_score(record: LockMonitoringRecord) -> int:
+    score = 0
+    if record.record_type == LockMonitoringRecord.LOCK_WAIT:
+        score += 100
+    if record.is_lock_waiting:
+        score += 80
+    if record.is_lock_blocking:
+        score += 70
+    if record.is_long_running:
+        score += 35
+    if (record.duration_seconds or 0) >= 3600:
+        score += 20
+    if (record.duration_seconds or 0) >= 7200:
+        score += 20
+    score += min(len(record.contention_signals) * 8, 40)
+    return score
+
+
+def _lock_monitor_record_severity(score: int) -> str:
+    if score >= 100:
+        return "critical"
+    if score >= 55:
+        return "warning"
+    return "watch"
+
+
+def _lock_monitor_record_reason(record: LockMonitoringRecord) -> str:
+    if record.record_type == LockMonitoringRecord.LOCK_WAIT:
+        return "Lock wait captured"
+    if record.is_lock_waiting:
+        return "Waiting on a lock"
+    if record.is_lock_blocking:
+        return "Blocking another query"
+    if record.is_long_running:
+        return "Long-running query"
+    if record.contention_signals:
+        return "Runtime signals detected"
+    return "Observed activity"
+
+
+def _lock_monitor_signal_label(signal: str) -> str:
+    labels = {
+        "waiting_on_lock": "Waiting on lock",
+        "blocking_other_query": "Blocking other query",
+        "sleeping_transaction_holds_lock": "Sleeping transaction holds lock",
+        "statement_lock_time": "Statement lock time",
+        "statement_temp_disk_tables": "Disk temp table",
+        "statement_no_index_used": "No index used",
+        "statement_no_good_index": "No good index",
+        "statement_sort_merge_passes": "Sort merge passes",
+        "high_rows_examined_to_sent": "High rows examined",
+        "server_connection_utilization_high": "High connection use",
+        "server_innodb_lock_waits_active": "Server lock waits active",
+    }
+    return labels.get(signal, signal.replace("_", " ").title())
 
 
 def _filtered_lock_monitor_records(
@@ -390,6 +561,7 @@ def _filtered_lock_monitor_records(
     schema = request.GET.get("schema", "").strip()
     record_type = request.GET.get("record_type", "").strip()
     search = request.GET.get("search", "").strip()
+    captured_after, captured_before = _lock_monitor_captured_at_bounds(request)
 
     if run_id:
         records = (
@@ -403,6 +575,10 @@ def _filtered_lock_monitor_records(
         records = records.filter(schema_name__icontains=schema)
     if record_type in dict(LockMonitoringRecord.RECORD_TYPES):
         records = records.filter(record_type=record_type)
+    if captured_after is not None:
+        records = records.filter(captured_at__gte=captured_after)
+    if captured_before is not None:
+        records = records.filter(captured_at__lte=captured_before)
     if search:
         records = records.filter(
             Q(query_text__icontains=search)
@@ -415,6 +591,36 @@ def _filtered_lock_monitor_records(
             | Q(state__icontains=search)
         )
     return records
+
+
+def _has_lock_monitor_record_filters(request: HttpRequest) -> bool:
+    captured_after, captured_before = _lock_monitor_captured_at_bounds(request)
+    record_type = request.GET.get("record_type", "").strip()
+    return bool(
+        request.GET.get("schema", "").strip()
+        or request.GET.get("search", "").strip()
+        or record_type in dict(LockMonitoringRecord.RECORD_TYPES)
+        or captured_after is not None
+        or captured_before is not None
+    )
+
+
+def _lock_monitor_captured_at_bounds(
+    request: HttpRequest,
+) -> tuple[datetime | None, datetime | None]:
+    captured_date = parse_date(request.GET.get("captured_date", "").strip())
+    if captured_date is None:
+        return None, None
+
+    from_time = parse_time(request.GET.get("from_time", "").strip()) or time.min
+    to_time = parse_time(request.GET.get("to_time", "").strip()) or time.max
+    current_timezone = timezone.get_current_timezone()
+    return (
+        timezone.make_aware(
+            datetime.combine(captured_date, from_time), current_timezone
+        ),
+        timezone.make_aware(datetime.combine(captured_date, to_time), current_timezone),
+    )
 
 
 @login_required
@@ -683,6 +889,50 @@ def command_schedule_create(request: HttpRequest) -> HttpResponse:
         )
 
     CommandScheduleService.create(form.save())
+    response = render(
+        request,
+        "partials/_command_schedule_list.html",
+        {"schedules": CommandScheduleService.all()},
+    )
+    response["HX-Retarget"] = "#command-schedule-list"
+    response["HX-Reswap"] = "innerHTML"
+    response["HX-Trigger"] = "closeCommandModal"
+    return response
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def command_schedule_update(request: HttpRequest, pk: int) -> HttpResponse:
+    schedule = get_object_or_404(CommandSchedule, pk=pk)
+    if request.method == "GET":
+        response = render(
+            request,
+            "partials/_command_schedule_form.html",
+            {
+                "form": CommandScheduleForm(instance=schedule),
+                "form_action": reverse("command_schedule_update", args=[schedule.pk]),
+                "modal_title": "Edit Schedule",
+                "command_defaults": _command_defaults(),
+            },
+        )
+        response["HX-Trigger"] = "openCommandModal"
+        return response
+
+    form = CommandScheduleForm(request.POST, instance=schedule)
+    if not form.is_valid():
+        return render(
+            request,
+            "partials/_command_schedule_form.html",
+            {
+                "form": form,
+                "form_action": reverse("command_schedule_update", args=[schedule.pk]),
+                "modal_title": "Edit Schedule",
+                "command_defaults": _command_defaults(),
+            },
+            status=422,
+        )
+
+    CommandScheduleService.update(form.save())
     response = render(
         request,
         "partials/_command_schedule_list.html",

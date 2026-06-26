@@ -4,6 +4,7 @@
         <thead>
             <tr>
                 <th>Command</th>
+                <th>Hostname</th>
                 <th>Schedule</th>
                 <th>Status</th>
                 <th>Last Run</th>
@@ -14,6 +15,7 @@
             {% for schedule in schedules %}
             <tr class="hover">
                 <td class="font-mono text-xs">{{ schedule.command_key }}</td>
+                <td class="font-mono text-xs">{{ schedule.hostname_display }}</td>
                 <td class="font-mono text-xs">{{ schedule.schedule_display }}</td>
                 <td>
                     {% if schedule.is_active %}
@@ -27,6 +29,12 @@
                 </td>
                 <td>
                     <div class="flex gap-1">
+                        <button class="btn btn-ghost btn-xs"
+                                hx-get="{% url 'command_schedule_update' schedule.pk %}"
+                                hx-target="#command-modal-content"
+                                hx-swap="innerHTML">
+                            Edit
+                        </button>
                         <button class="btn btn-ghost btn-xs"
                                 hx-post="{% url 'command_schedule_toggle' schedule.pk %}"
                                 hx-target="#command-schedule-list"

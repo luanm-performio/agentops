@@ -515,13 +515,20 @@ batchSet.forEach(b => { document.getElementById('filterBatch').innerHTML += `<op
 
 document.getElementById('transformsTHead').innerHTML =
   '<th>#</th><th>Batch</th><th>Transform</th>' +
-  LABELS.map((l, i) => `<th style="color:${clr(i)}">${l}<br><span style="font-size:.63rem;font-weight:400;color:var(--muted)">s · rows · sql</span></th>`).join('') +
+  LABELS.map((l, i) => `<th style="color:${clr(i)}">${l}<br><span style="font-size:.63rem;font-weight:400;color:var(--muted)">s · step # · rows · sql/log</span></th>`).join('') +
   '<th>Best Run</th>';
 
 function renderTransforms() {
-  if (!D.same_length && N > 1) {
+  if (N > 1 && (!D.same_length || !D.same_sequence)) {
+    const warnings = [];
+    if (!D.same_sequence) {
+      warnings.push(`Runs do not have identical step order. Rows are matched by ${D.match_mode || 'step + event + occurrence'}, not raw line number; check each run's step # before comparing SQL.`);
+    }
+    if (!D.same_length) {
+      warnings.push('Some transforms are present in only one run (shown as –). Comparison columns reflect matched transforms only.');
+    }
     document.getElementById('warnTransforms').innerHTML =
-      '<div class="warn">⚠ Some transforms are present in only one run (shown as –). Comparison columns reflect matched transforms only.</div>';
+      `<div class="warn">⚠ ${warnings.join(' ')}</div>`;
   }
 
   const query    = document.getElementById('searchT').value.toLowerCase();
@@ -562,13 +569,18 @@ function renderTransforms() {
         : pct != null ? `<span class="badge ${pct > 50 ? 'badge-red' : 'badge-gray'}">+${pct}%</span>` : '';
       const recStr = t.records?.[ri] != null
         ? `<div style="color:var(--muted);font-size:.68rem;margin-top:2px">${t.records[ri].toLocaleString()} rows</div>` : '';
+      const sourceIdx = t.sourceIndexes?.[ri] != null
+        ? `<div style="color:var(--muted);font-size:.67rem;font-family:monospace;margin-top:2px">step #${t.sourceIndexes[ri]}</div>` : '';
       const st     = t.start_times?.[ri];
       const tLine  = st ? `<div style="color:var(--muted);font-size:.67rem;font-family:monospace;margin-top:2px">${st} → ${addSecs(st, d)}</div>` : '';
-      const sqlBtn = t.queries?.[ri]
-        ? `<div style="margin-top:3px"><button data-qidx="${t.origIdx}" data-ridx="${ri}"
+      const textBtn = t.queries?.[ri]
+        ? `<div style="margin-top:3px"><button data-qidx="${t.origIdx}" data-ridx="${ri}" data-kind="query"
              style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--muted);padding:1px 6px;cursor:pointer;font-size:.68rem;white-space:nowrap">SQL</button></div>`
-        : '';
-      return `<td style="color:${clr(ri)};vertical-align:top">${d.toFixed(3)} ${badge}${recStr}${tLine}${sqlBtn}</td>`;
+        : t.details?.[ri]
+          ? `<div style="margin-top:3px"><button data-qidx="${t.origIdx}" data-ridx="${ri}" data-kind="detail"
+               style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--muted);padding:1px 6px;cursor:pointer;font-size:.68rem;white-space:nowrap">Log</button></div>`
+          : `<div style="color:var(--muted);font-size:.67rem;margin-top:3px">No log captured</div>`;
+      return `<td style="color:${clr(ri)};vertical-align:top">${d.toFixed(3)} ${badge}${sourceIdx}${recStr}${tLine}${textBtn}</td>`;
     }).join('');
 
     const bestLabel = t.bestIdx >= 0 ? LABELS[t.bestIdx] : '–';
@@ -596,12 +608,16 @@ document.getElementById('tbTransforms').addEventListener('click', e => {
   if (!btn) return;
   const t  = D.transforms[parseInt(btn.dataset.qidx)];
   const ri = parseInt(btn.dataset.ridx ?? 0);
+  const kind = btn.dataset.kind === 'detail' ? 'detail' : 'query';
   if (!t) return;
 
   const runLabel = LABELS[ri] ?? `Run ${ri + 1}`;
   document.getElementById('modalBatch').textContent = t.batch;
-  document.getElementById('modalTitle').textContent = `${t.transform}  [${runLabel}]`;
-  document.getElementById('modalBody').textContent  = (t.queries?.[ri]) || '(no query text)';
+  const sourceIdx = t.sourceIndexes?.[ri] != null ? ` · step #${t.sourceIndexes[ri]}` : '';
+  const modalKind = kind === 'detail' ? 'Log' : 'SQL';
+  document.getElementById('modalTitle').textContent = `${t.transform}  [${runLabel}${sourceIdx}] · ${modalKind}`;
+  document.getElementById('modalBody').textContent  =
+    kind === 'detail' ? (t.details?.[ri] || '(no log text)') : (t.queries?.[ri] || '(no query text)');
   const modal = document.getElementById('queryModal');
   modal.dataset.transformName = t.transform;
   modal.dataset.transformIdx  = btn.dataset.qidx;
@@ -673,8 +689,8 @@ function renderRegressions() {
     document.getElementById('tbReg').innerHTML  = '';
     return;
   }
-  warnEl.innerHTML = !D.same_length && N > 1
-    ? '<div class="warn">⚠ Some transforms only appear in one run — those are excluded from regression analysis.</div>'
+  warnEl.innerHTML = N > 1 && (!D.same_length || !D.same_sequence)
+    ? `<div class="warn">⚠ ${!D.same_sequence ? `Runs do not have identical step order. Rows are matched by ${D.match_mode || 'step + event + occurrence'} before regression analysis. ` : ''}${!D.same_length ? 'Some transforms only appear in one run; those are excluded from regression analysis.' : ''}</div>`
     : '';
 
   const ta     = D.runs[ai].total;
@@ -838,4 +854,3 @@ function showPage(id, el) {
 </script>
 </body>
 </html>
-

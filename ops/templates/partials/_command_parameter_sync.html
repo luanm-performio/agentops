@@ -11,6 +11,28 @@
         const commandOnlyElements = form.querySelectorAll('[data-command-only]');
 
         const selectedDefaults = () => commandDefaults[commandSelect.value] || {};
+        const parameterInput = (key) => {
+            const field = form.elements.namedItem(key);
+            if (!field) return null;
+            if (!field.tagName && typeof field.length === 'number') {
+                return Array.from(field).find((input) => input.type !== 'hidden') || field[0] || null;
+            }
+            return field;
+        };
+        const readInputValue = (input) => {
+            if (input.type === 'checkbox') return input.checked;
+            if (input.type === 'number') {
+                return input.value === '' ? null : Number(input.value);
+            }
+            return input.value;
+        };
+        const writeInputValue = (input, value) => {
+            if (input.type === 'checkbox') {
+                input.checked = Boolean(value);
+                return;
+            }
+            input.value = value ?? '';
+        };
         const parseParameters = () => {
             try {
                 const parameters = JSON.parse(paramsText.value);
@@ -38,9 +60,9 @@
             if (!parameters) return;
             parameterContainers.forEach((container) => {
                 const key = container.dataset.commandParam;
-                const input = form.elements.namedItem(key);
+                const input = parameterInput(key);
                 if (input && Object.prototype.hasOwnProperty.call(parameters, key)) {
-                    input.value = parameters[key] ?? '';
+                    writeInputValue(input, parameters[key]);
                 }
             });
         };
@@ -50,9 +72,9 @@
             const defaults = selectedDefaults();
             parameterContainers.forEach((container) => {
                 const key = container.dataset.commandParam;
-                const input = form.elements.namedItem(key);
+                const input = parameterInput(key);
                 if (input && Object.prototype.hasOwnProperty.call(defaults, key)) {
-                    parameters[key] = input.value;
+                    parameters[key] = readInputValue(input);
                 }
             });
             paramsText.value = JSON.stringify(parameters, null, 2);
@@ -65,8 +87,10 @@
             syncInputsFromJson();
         });
         parameterContainers.forEach((container) => {
-            const input = form.elements.namedItem(container.dataset.commandParam);
-            if (input) input.addEventListener('input', syncJsonFromInputs);
+            const input = parameterInput(container.dataset.commandParam);
+            if (!input) return;
+            const eventName = input.type === 'checkbox' ? 'change' : 'input';
+            input.addEventListener(eventName, syncJsonFromInputs);
         });
         paramsText.addEventListener('input', syncInputsFromJson);
 

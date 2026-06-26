@@ -25,27 +25,141 @@
         {% if form.tenant_host.errors %}<p class="text-error text-xs mt-1">{{ form.tenant_host.errors|first }}</p>{% endif %}
     </fieldset>
 
-    <fieldset class="fieldset" data-command-param="database_server_url">
-        <legend class="fieldset-legend">Database Server</legend>
-        {{ form.database_server_url }}
-        {% if form.database_server_url.errors %}<p class="text-error text-xs mt-1">{{ form.database_server_url.errors|first }}</p>{% endif %}
-    </fieldset>
+    <div class="grid gap-4 md:grid-cols-2">
+        <fieldset class="fieldset" data-command-param="alert_threshold_seconds">
+            <legend class="fieldset-legend">Alert threshold (seconds)</legend>
+            {{ form.alert_threshold_seconds }}
+            <p class="text-xs text-base-content/50">Use 7200 for 2 hours, or 0 to disable alerts.</p>
+            {% if form.alert_threshold_seconds.errors %}<p class="text-error text-xs mt-1">{{ form.alert_threshold_seconds.errors|first }}</p>{% endif %}
+        </fieldset>
+        <fieldset class="fieldset" data-command-param="alert_recipient">
+            <legend class="fieldset-legend">Slack recipient</legend>
+            {{ form.alert_recipient }}
+            {% if form.alert_recipient.errors %}<p class="text-error text-xs mt-1">{{ form.alert_recipient.errors|first }}</p>{% endif %}
+        </fieldset>
+    </div>
 
-    <fieldset class="fieldset" data-command-param="schema_name">
-        <legend class="fieldset-legend">Schema</legend>
-        {{ form.schema_name }}
-        {% if form.schema_name.errors %}<p class="text-error text-xs mt-1">{{ form.schema_name.errors|first }}</p>{% endif %}
-    </fieldset>
-
-    <fieldset class="fieldset">
-        <legend class="fieldset-legend">Advanced Parameters JSON</legend>
-        {{ form.params_text }}
-        {% if form.params_text.errors %}<p class="text-error text-xs mt-1">{{ form.params_text.errors|first }}</p>{% endif %}
-    </fieldset>
+    <div class="grid gap-4 md:grid-cols-2">
+        <fieldset class="fieldset" data-command-param="alert_agent_name">
+            <legend class="fieldset-legend">Alert agent name</legend>
+            {{ form.alert_agent_name }}
+            {% if form.alert_agent_name.errors %}<p class="text-error text-xs mt-1">{{ form.alert_agent_name.errors|first }}</p>{% endif %}
+        </fieldset>
+        <fieldset class="fieldset" data-command-param="alert_agent_id">
+            <legend class="fieldset-legend">Alert agent ID</legend>
+            {{ form.alert_agent_id }}
+            {% if form.alert_agent_id.errors %}<p class="text-error text-xs mt-1">{{ form.alert_agent_id.errors|first }}</p>{% endif %}
+        </fieldset>
+    </div>
 
     <div class="alert alert-info text-sm" data-command-only="backup_download_import">
-        <span>Backup/import defaults to dry_run=true. The backup command can use {database_server_url}, {schema_name}, and {remote_backup_path}.</span>
+        <span>Backup/import starts in dry-run mode. The backup command can use {database_server_url}, {schema_name}, and {remote_backup_path}.</span>
     </div>
+
+    <div class="grid gap-4 md:grid-cols-3">
+        <fieldset class="fieldset" data-command-param="remote_host">
+            <legend class="fieldset-legend">Remote host</legend>
+            {{ form.remote_host }}
+            {% if form.remote_host.errors %}<p class="text-error text-xs mt-1">{{ form.remote_host.errors|first }}</p>{% endif %}
+        </fieldset>
+        <fieldset class="fieldset" data-command-param="ssh_user">
+            <legend class="fieldset-legend">SSH user</legend>
+            {{ form.ssh_user }}
+            {% if form.ssh_user.errors %}<p class="text-error text-xs mt-1">{{ form.ssh_user.errors|first }}</p>{% endif %}
+        </fieldset>
+        <fieldset class="fieldset" data-command-param="remote_user">
+            <legend class="fieldset-legend">Remote command user</legend>
+            {{ form.remote_user }}
+            {% if form.remote_user.errors %}<p class="text-error text-xs mt-1">{{ form.remote_user.errors|first }}</p>{% endif %}
+        </fieldset>
+    </div>
+
+    <div class="grid gap-4 md:grid-cols-2">
+        <fieldset class="fieldset" data-command-param="database_server_url">
+            <legend class="fieldset-legend">Database Server</legend>
+            {{ form.database_server_url }}
+            {% if form.database_server_url.errors %}<p class="text-error text-xs mt-1">{{ form.database_server_url.errors|first }}</p>{% endif %}
+        </fieldset>
+
+        <fieldset class="fieldset" data-command-param="schema_name">
+            <legend class="fieldset-legend">Schema</legend>
+            {{ form.schema_name }}
+            {% if form.schema_name.errors %}<p class="text-error text-xs mt-1">{{ form.schema_name.errors|first }}</p>{% endif %}
+        </fieldset>
+    </div>
+
+    <fieldset class="fieldset" data-command-param="backup_command">
+        <legend class="fieldset-legend">Backup command</legend>
+        {{ form.backup_command }}
+        <p class="text-xs text-base-content/50">Allowed placeholders: {database_server_url}, {schema_name}, {remote_backup_path}</p>
+        {% if form.backup_command.errors %}<p class="text-error text-xs mt-1">{{ form.backup_command.errors|first }}</p>{% endif %}
+    </fieldset>
+
+    <div class="grid gap-4 md:grid-cols-2">
+        <fieldset class="fieldset" data-command-param="remote_backup_path">
+            <legend class="fieldset-legend">Remote backup path</legend>
+            {{ form.remote_backup_path }}
+            {% if form.remote_backup_path.errors %}<p class="text-error text-xs mt-1">{{ form.remote_backup_path.errors|first }}</p>{% endif %}
+        </fieldset>
+        <fieldset class="fieldset" data-command-param="backup_process_pattern">
+            <legend class="fieldset-legend">Backup process pattern</legend>
+            {{ form.backup_process_pattern }}
+            {% if form.backup_process_pattern.errors %}<p class="text-error text-xs mt-1">{{ form.backup_process_pattern.errors|first }}</p>{% endif %}
+        </fieldset>
+    </div>
+
+    <div class="grid gap-4 md:grid-cols-2">
+        <fieldset class="fieldset" data-command-param="backup_poll_interval_seconds">
+            <legend class="fieldset-legend">Backup poll interval (seconds)</legend>
+            {{ form.backup_poll_interval_seconds }}
+            {% if form.backup_poll_interval_seconds.errors %}<p class="text-error text-xs mt-1">{{ form.backup_poll_interval_seconds.errors|first }}</p>{% endif %}
+        </fieldset>
+        <fieldset class="fieldset" data-command-param="backup_timeout_seconds">
+            <legend class="fieldset-legend">Backup timeout (seconds)</legend>
+            {{ form.backup_timeout_seconds }}
+            {% if form.backup_timeout_seconds.errors %}<p class="text-error text-xs mt-1">{{ form.backup_timeout_seconds.errors|first }}</p>{% endif %}
+        </fieldset>
+    </div>
+
+    <div class="grid gap-4 md:grid-cols-2">
+        <fieldset class="fieldset" data-command-param="local_backup_path">
+            <legend class="fieldset-legend">Local backup path</legend>
+            {{ form.local_backup_path }}
+            {% if form.local_backup_path.errors %}<p class="text-error text-xs mt-1">{{ form.local_backup_path.errors|first }}</p>{% endif %}
+        </fieldset>
+        <fieldset class="fieldset" data-command-param="local_database">
+            <legend class="fieldset-legend">Local database</legend>
+            {{ form.local_database }}
+            {% if form.local_database.errors %}<p class="text-error text-xs mt-1">{{ form.local_database.errors|first }}</p>{% endif %}
+        </fieldset>
+    </div>
+
+    <div class="flex flex-wrap gap-4">
+        <fieldset class="fieldset" data-command-param="dry_run">
+            <label class="flex items-center gap-2 cursor-pointer">
+                <input type="hidden" name="dry_run" value="false">
+                {{ form.dry_run }}
+                <span class="text-sm">Dry run only</span>
+            </label>
+            {% if form.dry_run.errors %}<p class="text-error text-xs mt-1">{{ form.dry_run.errors|first }}</p>{% endif %}
+        </fieldset>
+        <fieldset class="fieldset" data-command-param="overwrite_local">
+            <label class="flex items-center gap-2 cursor-pointer">
+                <input type="hidden" name="overwrite_local" value="false">
+                {{ form.overwrite_local }}
+                <span class="text-sm">Overwrite local database</span>
+            </label>
+            {% if form.overwrite_local.errors %}<p class="text-error text-xs mt-1">{{ form.overwrite_local.errors|first }}</p>{% endif %}
+        </fieldset>
+    </div>
+
+    <details class="collapse collapse-arrow border border-base-300 bg-base-100">
+        <summary class="collapse-title text-sm font-semibold">Advanced Parameters JSON</summary>
+        <div class="collapse-content">
+            {{ form.params_text }}
+            {% if form.params_text.errors %}<p class="text-error text-xs mt-1">{{ form.params_text.errors|first }}</p>{% endif %}
+        </div>
+    </details>
 
     <div class="modal-action mt-6">
         <button type="button"

@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "anthropic>=0.109.2",
     "claude-agent-sdk>=0.2.101",
+    "croniter>=6.2.2",
     "django>=6.0",
     "django-htmx>=1.27.0",
     "django-q-rollbar>=0.1.3",

@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -20,12 +21,24 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-2o^4#qn!=c+wvpxlvyb=!2@uzfhc4*5gvc^g+f!qk8cbjou-+i"
+SECRET_KEY = os.environ.get(
+    "DJANGO_SECRET_KEY",
+    "django-insecure-2o^4#qn!=c+wvpxlvyb=!2@uzfhc4*5gvc^g+f!qk8cbjou-+i",
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get("DJANGO_DEBUG", "true").lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",")
+    if host.strip()
+]
 
 
 # Application definition
@@ -81,7 +94,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "NAME": Path(os.environ.get("DJANGO_DATABASE_PATH", BASE_DIR / "db.sqlite3")),
     }
 }
 
@@ -128,9 +141,9 @@ Q_CLUSTER = {
     "name": "agent_ops_cluster",
     "workers": 4,
     "recycle": 500,
-    "timeout": 10800,    # three hours for remote backup, transfer, and import
-    "retry": 10860,      # must exceed timeout to avoid duplicate execution
-    "ack_failures": True, # mark timed-out/crashed tasks as failures (visible in DB)
+    "timeout": 10800,  # three hours for remote backup, transfer, and import
+    "retry": 10860,  # must exceed timeout to avoid duplicate execution
+    "ack_failures": True,  # mark timed-out/crashed tasks as failures (visible in DB)
     "compress": True,
     "orm": "default",
 }
@@ -140,3 +153,7 @@ AUTH_USER_MODEL = "users.CustomUser"
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "dashboard"
 LOGOUT_REDIRECT_URL = "login"
+
+LOCK_MONITOR_ALERT_AGENT_ID = os.environ.get("LOCK_MONITOR_ALERT_AGENT_ID", "")
+LOCK_MONITOR_ALERT_AGENT_NAME = os.environ.get("LOCK_MONITOR_ALERT_AGENT_NAME", "")
+LOCK_MONITOR_ALERT_RECIPIENT = os.environ.get("LOCK_MONITOR_ALERT_RECIPIENT", "me")
